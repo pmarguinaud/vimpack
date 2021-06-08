@@ -1,0 +1,318 @@
+#!/usr/bin/perl -w
+
+=head1 NAME
+
+vimpack
+
+=head1 DESCRIPTION
+
+A pack editor based on vim; a vim compiled with the embedded Perl interpreter has to be available in your PATH
+
+=head1 AUTHOR
+
+Philippe.Marguinaud@meteo.fr
+
+=cut
+
+
+use strict;
+use FindBin qw ($Bin);
+use lib "$Bin/lib";
+
+use FileHandle;
+use File::Basename;
+use Getopt::Long;
+use Data::Dumper;
+use File::Path;
+use vimpack::mini;
+
+unless (-f '.gmkview')
+  {
+    die ("This program should be called from within a pack; change directory to a valid pack!\n");
+  }
+
+my @opts = qw (d v i g b w);
+my %opts = map { ($_, 0), } @opts;
+&GetOptions (map { ($_, \$opts{$_}) } @opts);
+
+if ($opts{i})
+  {
+    my $e = 'vimpack'->new (TOP => '.vimpack');
+
+    $e->{fhlog} = \*STDOUT;
+    $e->idx ();
+    exit (0);
+  }
+
+my $dTOP = '.vimpack';
+my $dTMP = "$dTOP/tmp=";
+my $dHLP = "$dTOP/hlp=";
+
+&mkpath ($_)
+  for ($dTOP, $dTMP, $dHLP);
+
+my ($fCOM, $fHLP) = ("$dTOP/start.vim", "$dHLP/vimpack.txt");
+
+my $hCOM = 'FileHandle'->new (">$fCOM");
+
+$hCOM->print (<< "EOF");
+
+
+set helpfile=$fHLP
+helptags $dHLP
+
+if has('perl')
+
+perl <<
+use lib "$Bin/lib"; 
+use strict; 
+use warnings; 
+use vimpack; 
+our \$EDITOR = 'vimpack'->new (TOP => "$dTOP", WARN => $opts{w}); 
+.
+
+EOF
+
+$hCOM->print (<< 'EOF');
+command! -nargs=1 F      :perl $::EDITOR->FIND (word => "<args>")
+command! -nargs=0 C      :perl $::EDITOR->COMMIT (quit => 0)
+command! -nargs=0 Cq     :perl $::EDITOR->COMMIT (quit => 1)
+command! -nargs=1 E      :perl $::EDITOR->EDIT ("<args>")
+command! -nargs=0 D      :perl $::EDITOR->DIFF ()
+command! -nargs=* T      :perl $::EDITOR->TRANSFORM ("<args>")
+command! -nargs=0 H      :perl $::EDITOR->LOGHIST ()
+command! -nargs=1 NF     :perl $::EDITOR->NEWFILE ("<args>")
+map <TAB>                :perl $::EDITOR->FIND (auto => 1, new_window => 0, defn => 0)<CR>
+map œ                    :perl $::EDITOR->FIND (auto => 1, new_window => 0, defn => 1)<CR>
+map ²                    :perl $::EDITOR->FIND (auto => 1, new_window => 0, defn => 1)<CR>
+map <S-TAB>              :perl $::EDITOR->FIND (auto => 1, new_window => 1, defn => 0)<CR>
+map <C-²>                :perl $::EDITOR->FIND (auto => 1, new_window => 1, defn => 1)<CR>
+map <BS>                 :perl $::EDITOR->BACK ()<CR>
+map cd                   d/}><CR>xx
+map cc                   /<{<CR>
+autocmd BufWritePost  *  :perl $::EDITOR->COMMIT (auto => 1)
+autocmd BufWritePre   *  :perl $::EDITOR->UCOM (auto => 1);
+command! -nargs=0 WI     :perl $::EDITOR->ICOM ();
+command! -nargs=0 WR     :perl $::EDITOR->UCOM ();
+
+autocmd BufWinEnter   *  :perl $::EDITOR->ICOM (auto => 1);
+EOF
+
+# command! -nargs=0 H    :perl $EDITOR->LOGHIST ()
+
+if ($opts{v})
+  {
+    $hCOM->print (<< "EOF");
+perl \$::EDITOR->setlog (1);
+EOF
+  }
+
+if ($opts{b})
+  {
+    my @bt;
+    while (<>)
+      {
+# Intel
+#       237 lfitools           00000000004BB8D2  sdl_mod_mp_sdl_sr         100  sdl_mod.F90
+        if (m/^.*\s+(\d+)\s+(\S+)$/o)
+          {
+            unshift (@bt, "$2:$1");
+          }
+# DrHook
+#       237 (pid=71798): /tmp/gmkpack/gmktmp.48341/Pcplpack/dirwork.5/mpl_abort_mod.F90:36  :  lfitools() [0x4bc950]
+        elsif (m/\(pid=\d+\):\s+(\S+):(\d+)\s+:/o)
+          {
+            use File::Basename;
+            unshift (@bt, &basename ($1) . ":$2");
+          }
+
+      }
+    unshift (@ARGV, reverse (@bt));
+  }
+
+
+if (@ARGV)
+  {
+
+    my $method = 'EDIT';
+    $method = 'DIFF' if ($opts{d});
+    $method = 'BT'   if ($opts{b});
+
+    local $" = "', '";
+    $hCOM->print (<< "EOF");
+perl \$::EDITOR->$method ('@ARGV')
+
+EOF
+
+  }
+
+$hCOM->print (<< "EOF");
+
+else
+  echohl WarningMsg | echo "Vim requires en embedded Perl in order to run vimpack" | echohl None
+endif
+
+EOF
+
+$hCOM->close ();
+
+
+my $hHELP = 'FileHandle'->new (">$fHLP")->print (<< 'EOF');
+*vimpack.txt*
+
+                     Gmkpack-ready Vim editor 
+
+Gmkpack and Vim                                     *vimpack* 
+
+1. Description                                      |vimpack-description|
+2. Usage                                            |vimpack-usage|
+3. Principles                                       |vimpack-principles|
+4. Commands and mappings                            |vimpack-commands|
+5. History                                          |vimpack-history|
+
+==============================================================================
+1. Description                                      *vimpack-description*
+
+A pack editor based on vim; a vim compiled with the embedded Perl interpreter 
+has to be available in your PATH. 
+
+==============================================================================
+2. Usage                                            *vimpack-usage*
+
+You must first cd to a valid pack.  An index must have been build using the 
+`vimpack -i' command. Then just type `vimpack filename.F90'; for instance >
+
+ vimpack cnt0.F90
+
+<
+
+To edit in diff mode (assuming cnt0.F90 has been modified in an intermediate 
+or local pack) >
+
+ vimpack -d cnt0.F90
+
+<
+
+==============================================================================
+3. Principles                                       *vimpack-principles*
+
+vimpack looks up files in your pack using the index created by vimpack -i; 
+please run `vimpack -i' before attempting to edit any file with vimpack. 
+If a file already belongs to your local branch, then vimpack will edit it 
+directly. Otherwise (the file you requested belong to the main or an 
+intermediate branch), you will be given a copy of this file to edit (you can
+see that in Vim status bar).
+It is possible to commit temporary edited files using the :C command; writing
+a temporary file (using :w) will automatically commit the file if it has been
+modified.
+
+Text based search is possible and has the following features :
+
+- case insensitive
+- strings and comments are taken into acount
+- keywords are searched too
+
+Search for a word using the following command >
+
+ :F wrgp2fa
+
+<
+
+If the cursor is over a word, this word can be looked up using the <TAB> key.
+
+For instance, searching for yomct3 yields the following output >
+
+ald/adiab/especrt.F90
+
+    62 | USE YOM_YGFL , ONLY : YGFL, YQ, YL, YI,YR, YS, YG
+    63 | USE TRAJECTORY_MOD,ONLY : LTRAJGP, GET_TRAJ_GRID
+    64 | USE YOMCT3   , ONLY : NSTEP
+    65 | USE YOMLUN   , ONLY : NULOUT
+    66 | 
+
+ald/c9xx/ecoptra.F90
+
+    48 | 
+    49 | USE YOMCT0   , ONLY : NSTART   
+    50 | USE YOMCT3   , ONLY : NSTEP
+    51 | USE YOMDIM   , ONLY : NFLEVG
+    52 | USE YOMSP    , ONLY : SPA1 
+
+ald/coupling/ecoupl1.F90
+
+    37 | USE YOMCT0   , ONLY : NCONF
+    38 | USE YOMCT2   , ONLY : NSTAR2
+    39 | USE YOMCT3   , ONLY : NSTEP
+    40 | USE YOMDIM   , ONLY : NFLEVG   ,NGPBLKS
+
+...
+
+
+<
+
+When viewing a search result, it is possible to jump to a particular location, 
+just move the cursor to a file name or a line number and press <TAB>.
+
+If <S-TAB> is pressed and if the cursor is over a subroutine (resp. module, 
+resp.  defined type) name inside a CALL (resp. USE, resp. type declaration)
+statement, then the subroutine (resp. module, resp. type) definition will be 
+looked for; if this definition is not found, then ordinaey search results
+will be displayed.
+
+==============================================================================
+4. Commands and mappings                            *vimpack-commands*
+
+                                                    *:F*
+:F mpl_send 
+
+Finds all occurrences of mpl_send in the code.
+
+                                                    *:C*
+:C 
+
+Commit a temporary file (if modified) to src/local.
+
+                                                    *:Cq*
+:Cq 
+
+Commit to src/local (if file was modified) and exit.
+
+                                                    *:E*
+:E filename.F90 
+
+Edit filename.F90
+
+                                                    *:D*
+:D 
+
+Diff current file with N-1 version.
+
+<TAB> 
+
+Search for word under cursor.
+
+<S-TAB> 
+
+Search for entity definition (when possible).
+
+<BS> 
+
+Go back in the history.
+
+==============================================================================
+5. History                                          *vimpack-history*
+
+May 2012 : Created by Philippe.Marguinaud@meteo.fr
+
+==============================================================================
+ vim:tw=78:ts=8:ft=help:norl:
+
+EOF
+
+
+my $VIM = $ENV{VIMPACKVIM} || 'vim';
+
+
+exec ($VIM, ($opts{g} ? ('-g') : ()), -S => $fCOM);
+
+
