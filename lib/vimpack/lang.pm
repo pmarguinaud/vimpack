@@ -14,7 +14,7 @@ sub lang
     if ($_[0] =~ m/\.F(?:90)?$/io);
 
   return 'C'
-    if ($_[0] =~ m/\.c$/io);
+    if ($_[0] =~ m/\.(?:c|cc)$/io);
 
   return 'unknown';
 }
