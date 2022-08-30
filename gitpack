@@ -7,8 +7,12 @@ use File::Basename;
 use FileHandle;
 use File::stat;
 use Data::Dumper;
+use Storable;
 use Cwd;
 use Getopt::Long;
+
+my @GIT = ('/bin/git');
+my $GITPACK = '.gitpack';
 
 sub bt
 { 
@@ -24,17 +28,41 @@ sub bt
 local $SIG{__WARN__} = \&bt;
 local $SIG{__DIE__} = \&bt;
 
+sub run
+{
+  my @cmd = @_;
+  system (@cmd) and die ("Command `@cmd' failed\n");
+}
+
+my $gitpack_time = "$GITPACK/time";
+
+sub init
+{
+  return if (-d "$GITPACK");
+  my @view = do { my $fh = 'FileHandle'->new ('<.gmkview'); <$fh> };
+  chomp for (@view);
+
+  my $pack = readlink ("src/$view[1]"); $pack = &dirname ($pack) for (1 .. 2);
+
+  die unless (-d "$pack/$GITPACK/git");
+
+  &mkpath ("$GITPACK/git");
+
+  &run ("cp -alf $pack/$GITPACK/git/* ./$GITPACK/git/");
+  &run ("cp -r $pack/$GITPACK/git/.git ./$GITPACK/git/.git");
+  
+  'FileHandle'->new (">$gitpack_time");
+}
+
 my $cwd = &cwd ();
 
 my %opts;
-
-my @GIT = ('/bin/git');
 
 sub git
 {
   use POSIX qw ();
   my ($command, @args) = @_;
-  chdir ("$cwd/.gitpack/git");
+  chdir ("$cwd/$GITPACK/git");
 
   my @cmd = (@GIT, $command, @args);
   print "@cmd\n" if ($opts{verbose});
@@ -57,6 +85,11 @@ if (@ARGV && ($ARGV[0] =~ m/^-/o))
     (
       verbose => \$opts{verbose},
     );
+    if ($opts{init})
+      {
+        &init ();
+        exit (0);
+      }
   }
 
 my $command = shift;
@@ -65,7 +98,7 @@ my @args = @ARGV;
 my @view = do { my $fh = 'FileHandle'->new ('<.gmkview'); <$fh> };
 chomp for (@view);
 @view = map { "src/$_" } @view;
-@view = ('.gitpack/tmp', @view);
+@view = ("$GITPACK/tmp", @view);
 
 $command or exec (@GIT);
 
@@ -82,16 +115,38 @@ sub scanPack
 {
   my @view = @_;
 
-  my %p;
+  my $key = join (',', @view); $key =~ s,/,+,go;
+  my $file = "$GITPACK/scan/scan.$key.pl";
 
-  for my $view (@view)
+  my $p = {};
+
+  if (-f $file)
     {
-      chdir ("$cwd/$view");
-      &find ({wanted => sub { my $f = $File::Find::name; $p{$f} ||= 'File::Spec'->rel2abs ($f) if (&ok ($f)) }, no_chdir => 1}, grep { -d } <*>);
-      chdir ($cwd);
+      $p = &Storable::retrieve ($file);
+    }
+  else
+    {
+      for my $view (@view)
+        {
+          chdir ("$cwd/$view");
+          my $wanted = sub 
+          { 
+            my $f = $File::Find::name; 
+            $p->{$f} ||= 'File::Spec'->rel2abs ($f) if (&ok ($f)) 
+          };
+          &find ({wanted => $wanted, no_chdir => 1}, grep { -d } <*>);
+          chdir ($cwd);
+        }
+     
+      if (@view && (-l $view[0]))
+        {
+          # Cache the result
+          &mkpath ("$GITPACK/scan");
+          &Storable::nstore ($p, $file);
+        }
     }
 
-  return \%p;
+  return $p;
 }
 
 sub ok
@@ -106,7 +161,7 @@ sub ok
 sub doLink
 {
   my ($f, $g) = @_;
-  print "$f -> $g\n" if ($opts{verbose});
+  print "LN $f $g\n" if ($opts{verbose});
   unlink ($g) if (-f $g);
   my $d = &dirname ($g);
   &mkpath ($d) unless (-d $d);
@@ -119,6 +174,7 @@ sub doZeroFile
   my $d = &dirname ($f);
   &mkpath ($d) unless (-d $d);
   unlink ($f);
+  print "ZERO $f\n" if ($opts{verbose});
   'FileHandle'->new (">$f");
 }
 
@@ -164,8 +220,12 @@ sub newer
   return $stf->mtime > $stg->mtime;
 }
 
-my $s = '.gitpack/time';
-my $sts = stat ($s);
+my $stgitpack_time = stat ($gitpack_time);
+
+
+#####        First part : update git repository with local changes         #####
+
+# Compare tmp and local and see what has changed
 
 my $v0 = &scanPack ($view[0]); # Scan tmp
 my $v1 = &scanPack ($view[1]); # Scan local
@@ -181,7 +241,7 @@ for my $f (@f)
     if ($f1)
       {
         my $stf1 = stat ($f1);
-        next if (&newer ($s, $f1, $sts, $stf1));
+        next if (&newer ($gitpack_time, $f1, $stgitpack_time, $stf1));
       }
 
     if ($f0 && (! $f1))
@@ -202,8 +262,8 @@ for my $f (@f)
 
 for my $f (@c, @p)
   {
-    &doLink ($v1->{$f}, "$cwd/.gitpack/tmp/$f");
-    &doLink ($v1->{$f}, "$cwd/.gitpack/git/$f"); 
+    &doLink ($v1->{$f}, "$cwd/$GITPACK/tmp/$f");
+    &doLink ($v1->{$f}, "$cwd/$GITPACK/git/$f"); 
     &git ('add', '-f', $f);
   }
 
@@ -211,22 +271,28 @@ for my $f (@c, @p)
 
 for my $f (@m)
   {
-    &doUnlink ("$cwd/.gitpack/tmp/$f");
+    &doUnlink ("$cwd/$GITPACK/tmp/$f");
     &git ('rm', '-f', $f);
   }
 
+#####                   Second part : run git command                      #####
+
 &git ($command, @args);
+
+#####          Third part : update local and tmp using repository          #####
 
 if ($w)
   {
-    my $g = &scanPack ('.gitpack/git');
+    my $g = &scanPack ("$GITPACK/git");
+
+    # Add new files from repository to tmp and local
 
     MAIN: for my $f (sort keys (%$g))
       {
         my $stf = stat ($g->{$f});
      
         # This file has already been looked at earlier; skip it
-        next MAIN if (&newer ($s, $g->{$f}, $sts, $stf));
+        next MAIN if (&newer ($gitpack_time, $g->{$f}, $stgitpack_time, $stf));
        
         if (my $stl = stat ("$cwd/$view[0]/$f"))
           {
@@ -256,11 +322,13 @@ if ($w)
         &doLink ($g->{$f}, "$cwd/$view[$_]/$f") for (0 .. 1);
       }
 
+    # Remove files from tmp and local, when they have vanished from repository
+
     my $v0 = &scanPack ($view[0]);
     my $v1 = &scanPack ($view[1]);
     for my $f (sort keys (%$v0))
       {
-        next if (-f "$cwd/.gitpack/git/$f");
+        next if (-f "$cwd/$GITPACK/git/$f");
         &doUnlink ($v0->{$f}); delete $v0->{$f};
         &doUnlink ($v1->{$f}); delete $v1->{$f};
       }
@@ -269,36 +337,16 @@ if ($w)
     my $p = &scanPack (@view[2..$#view]);
     for my $f (sort keys (%$p))
       {
-        next if (-f "$cwd/.gitpack/git/$f");
-        $f = "$cwd/.gitpack/tmp/$f";
-        &doUnlink ($f);
-        &doZeroFile ($f);
-      }
-
-
-    for my $f (sort keys (%$v1))
-      {
-        next if ($v0->{$f});
-        &doUnlink ($v1->{$f});
-        delete ($v1->{$f});
-      }
-
-    for my $f (sort keys (%$v0))
-      {
-        my $f0 = $v0->{$f};
-        my $stf0 = stat ($f0);
-        next if (&newer ($s, $f0, $sts, $stf0));
-        my $f1 = $v1->{$f};
-        goto LINK unless ($f1);
-        my $stf1 = stat ($f1);
-        next if (&testEqualFiles ($f0, $f1, $stf0, $stf1));
-LINK:
-        $f1 = "$cwd/$view[1]/$f";
-        &doLink ($f0, $f1);
+        next if (-f "$cwd/$GITPACK/git/$f");
+        for my $view (@view[0,1])
+          {
+            my $g = "$cwd/$view/$f";
+            &doZeroFile ($g); 
+          }
       }
 
   }
 
-'FileHandle'->new (">$s");
+'FileHandle'->new (">$gitpack_time");
 
 
