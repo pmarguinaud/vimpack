@@ -76,7 +76,7 @@ sub git
   chdir ($cwd);
 }
 
-my @r = qw (branch push status log show rm add commit mv fetch diff);
+my @r = qw (branch push status log show commit fetch diff);
 my @w = qw (checkout pull merge reset);
 
 if (@ARGV && ($ARGV[0] =~ m/^-/o))
@@ -232,16 +232,33 @@ my $v1 = &scanPack ($view[1]); # Scan local
 
 my @f = keys (%{ {%$v0, %$v1} });
 
-my (@p, @m, @c); # +, -, changed
+my (@p, @m, @c, @z); # +, -, changed, zero
 
 for my $f (@f)
   {
     my ($f0, $f1) = ($v0->{$f}, $v1->{$f});
 
+    my $stf0 = $f0 && stat ($f0);
+    my $stf1 = $f1 && stat ($f1);
+
     if ($f1)
       {
-        my $stf1 = stat ($f1);
         next if (&newer ($gitpack_time, $f1, $stgitpack_time, $stf1));
+        # Newly zeroed file
+        if (($stf1->size == 0) && ((! $stf0) || ($stf0->size)))
+          {
+            my $exists = 0;
+            # Check it does exist in parent pack
+            for my $view (@view[2,$#view])
+              {
+                last if ($exists = -f "$cwd/$view/$f");
+              }
+            if ($exists)
+              {
+                push @z, $f;
+                next; 
+              }
+          }
       }
 
     if ($f0 && (! $f1))
@@ -252,11 +269,13 @@ for my $f (@f)
       {
         push @p, $f;
       }
-    elsif (! &testEqualFiles ($f0, $f1))
+    elsif (! &testEqualFiles ($f0, $f1, $stf0, $stf1))
       {
         push @c, $f;
       }
   }
+
+#print &Dumper ([p => \@p, m => \@m, c => \@c, z => \@z]);
 
 # Add new/modified files
 
@@ -272,7 +291,13 @@ for my $f (@c, @p)
 for my $f (@m)
   {
     &doUnlink ("$cwd/$GITPACK/tmp/$f");
-    &git ('rm', '-f', $f);
+    &git ('rm', '-f', '--quiet', $f);
+  }
+
+for my $f (@z)
+  {
+    &doLink ($v1->{$f}, "$cwd/$GITPACK/tmp/$f");
+    &git ('rm', '-f', '--quiet', $f);
   }
 
 #####                   Second part : run git command                      #####
