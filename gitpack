@@ -79,15 +79,35 @@ sub git
 my @r = qw (branch push status log show commit fetch diff);
 my @w = qw (checkout pull merge reset);
 
+sub bash
+{
+  for my $command (@r, @w)
+    {
+      print (<< "EOF");
+function $command ()
+{
+  gitpack $command \$*
+}
+
+EOF
+    }
+}
+
 if (@ARGV && ($ARGV[0] =~ m/^-/o))
   {
+    my @opts_f = qw (verbose init bash);
     &GetOptions
     (
-      verbose => \$opts{verbose},
+      (map { ($_, \$opts{$_}) } @opts_f),
     );
     if ($opts{init})
       {
         &init ();
+        exit (0);
+      }
+    elsif ($opts{bash})
+      {
+        &bash ();
         exit (0);
       }
   }
