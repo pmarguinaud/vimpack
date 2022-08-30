@@ -118,6 +118,7 @@ sub doZeroFile
   my $f = shift;
   my $d = &dirname ($f);
   &mkpath ($d) unless (-d $d);
+  unlink ($f);
   'FileHandle'->new (">$f");
 }
 
@@ -220,15 +221,14 @@ if ($w)
   {
     my $g = &scanPack ('.gitpack/git');
 
-    MAIN: for my $f (keys (%$g))
+    MAIN: for my $f (sort keys (%$g))
       {
         my $stf = stat ($g->{$f});
      
         # This file has already been looked at earlier; skip it
         next MAIN if (&newer ($s, $g->{$f}, $sts, $stf));
        
-        my $l = "$cwd/$view[0]/$f";
-        if (my $stl = stat ($l))
+        if (my $stl = stat ("$cwd/$view[0]/$f"))
           {
             unless ($stl->size) 
               {
@@ -238,28 +238,36 @@ if ($w)
               }
           }
 
-        for my $view (@view)
+        for my $view (@view[2..$#view])
           {
             my $v = "$cwd/$view/$f";
             next unless (my $stv = stat ($v));
             if (&testEqualFiles ($g->{$f}, $v, $stf, $stv))
               {
-                # File exists and is the same as in the git repo, do nothing
+                # File exists and is the same as in the git repo, remove local copy
+                &doUnlink ("$cwd/$view[$_]/$f") for (0 .. 1);
                 next MAIN;
               }
             else
               {
-                # File exists, but is different than the one in git repo
-                # Link file from git repo in tmp
-                &doLink ($g->{$f}, $l);
+                last;
               }
            }
-        &doLink ($g->{$f}, $l);
+        &doLink ($g->{$f}, "$cwd/$view[$_]/$f") for (0 .. 1);
       }
 
-    # Removed files become empty
+    my $v0 = &scanPack ($view[0]);
+    my $v1 = &scanPack ($view[1]);
+    for my $f (sort keys (%$v0))
+      {
+        next if (-f "$cwd/.gitpack/git/$f");
+        &doUnlink ($v0->{$f}); delete $v0->{$f};
+        &doUnlink ($v1->{$f}); delete $v1->{$f};
+      }
+
+    # Removed files from parent pack become empty
     my $p = &scanPack (@view[2..$#view]);
-    for my $f (keys (%$p))
+    for my $f (sort keys (%$p))
       {
         next if (-f "$cwd/.gitpack/git/$f");
         $f = "$cwd/.gitpack/tmp/$f";
@@ -267,22 +275,20 @@ if ($w)
         &doZeroFile ($f);
       }
 
-    my $p0 = &scanPack ($view[0]);
-    my $p1 = &scanPack ($view[1]);
 
-    for my $f (sort keys (%$p1))
+    for my $f (sort keys (%$v1))
       {
-        next if ($p0->{$f});
-        &doUnlink ($p1->{$f});
-        delete ($p1->{$f});
+        next if ($v0->{$f});
+        &doUnlink ($v1->{$f});
+        delete ($v1->{$f});
       }
 
-    for my $f (sort keys (%$p0))
+    for my $f (sort keys (%$v0))
       {
-        my $f0 = $p0->{$f};
+        my $f0 = $v0->{$f};
         my $stf0 = stat ($f0);
         next if (&newer ($s, $f0, $sts, $stf0));
-        my $f1 = $p1->{$f};
+        my $f1 = $v1->{$f};
         goto LINK unless ($f1);
         my $stf1 = stat ($f1);
         next if (&testEqualFiles ($f0, $f1, $stf0, $stf1));
