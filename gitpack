@@ -38,18 +38,64 @@ my $gitpack_time = "$GITPACK/time";
 
 sub init
 {
+  my %opts = @_;
   return if (-d "$GITPACK");
   my @view = do { my $fh = 'FileHandle'->new ('<.gmkview'); <$fh> };
   chomp for (@view);
 
-  my $pack = readlink ("src/$view[1]"); $pack = &dirname ($pack) for (1 .. 2);
+  my $cwd = &cwd ();
+  @view = map { "$cwd/src/$_" } @view;
 
-  die unless (-d "$pack/$GITPACK/git");
+  if (my $git = $opts{repository})
+    {
+      my $p = &scanPack (@view[1..$#view]);
 
-  &mkpath ("$GITPACK/git");
+      &mkpath ("$GITPACK/git");
+      &run ("cp -alf $git/* ./$GITPACK/git/");
+      &run ("cp -r $git/.git ./$GITPACK/git/.git");
+      
+      my $g = &scanPack ("$GITPACK/git");
 
-  &run ("cp -alf $pack/$GITPACK/git/* ./$GITPACK/git/");
-  &run ("cp -r $pack/$GITPACK/git/.git ./$GITPACK/git/.git");
+      my @f = sort keys (%{ {%$p, %$g} });
+
+      for my $f (@f)
+        {
+          my $l = "$view[0]/$f";
+          my $stp = $p->{$f} && stat ($p->{$f});
+          my $stg = $g->{$f} && stat ($g->{$f});
+          if ($p->{$f} && $g->{$f})
+            {
+              unless (&testEqualFiles ($p->{$f}, $g->{$f}))
+                {
+                  &doLink ($g->{$f}, $l);
+                }
+            }
+          elsif ($p->{$f} && (! $g->{$f}))
+            {
+              &doZeroFile ($l);
+            }
+          elsif ((! $p->{$f}) && $g->{$f})
+            {
+              &doLink ($g->{$f}, $l);
+            }
+        }
+
+    }
+  elsif (scalar (@view) > 1)
+    {
+      my $pack = readlink ("src/$view[1]"); $pack = &dirname ($pack) for (1 .. 2);
+
+      die unless (-d "$pack/$GITPACK/git");
+
+      &mkpath ("$GITPACK/git");
+
+      &run ("cp -alf $pack/$GITPACK/git/* ./$GITPACK/git/");
+      &run ("cp -r $pack/$GITPACK/git/.git ./$GITPACK/git/.git");
+    }
+  else
+    {
+      die ("No git repository was found\n");
+    }
   
   'FileHandle'->new (">$gitpack_time");
 }
@@ -94,11 +140,12 @@ EOF
 }
 
 my @opts_f = qw (verbose init bash help);
+my @opts_s = qw (repository);
 
 sub help
 {
   print "Usage: " . &basename ($0) . "\n" 
-      . " Options:\n" . join ('', map { "   --$_\n" } @opts_f)
+      . " Options:\n" . join ('', map { "   --$_\n" } @opts_f, @opts_s)
       . " Commands:\n" . join ('', map { "   * $_\n" } (@r, @w));
 }
 
@@ -107,20 +154,21 @@ if (@ARGV && ($ARGV[0] =~ m/^-/o))
     &GetOptions
     (
       (map { ($_, \$opts{$_}) } @opts_f),
+      (map { ("$_=s", \$opts{$_}) } @opts_s),
     );
     if ($opts{init})
       {
-        &init ();
+        &init (%opts);
         exit (0);
       }
     elsif ($opts{bash})
       {
-        &bash ();
+        &bash (%opts);
         exit (0);
       }
     elsif ($opts{help})
       {
-        &help ();
+        &help (%opts);
         exit (0);
       }
   }
