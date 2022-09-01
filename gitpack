@@ -54,36 +54,36 @@ sub init
       &run ("cp -alf $git/* ./$GITPACK/git/");
       &run ("cp -r $git/.git ./$GITPACK/git/.git");
       
-      my $g = &scanPack ("$GITPACK/git");
+      my $g = &scanPack ("$cwd/$GITPACK/git");
 
       my @f = sort keys (%{ {%$p, %$g} });
 
       for my $f (@f)
         {
-          my $l = "$view[0]/$f";
+          my @l = ("$cwd/$GITPACK/tmp/$f", "$view[0]/$f");
           my $stp = $p->{$f} && stat ($p->{$f});
           my $stg = $g->{$f} && stat ($g->{$f});
           if ($p->{$f} && $g->{$f})
             {
               unless (&testEqualFiles ($p->{$f}, $g->{$f}))
                 {
-                  &doLink ($g->{$f}, $l);
+                  &doLink ($g->{$f}, $_) for (@l);
                 }
             }
           elsif ($p->{$f} && (! $g->{$f}))
             {
-              &doZeroFile ($l);
+              &doZeroFile ($_) for (@l);
             }
           elsif ((! $p->{$f}) && $g->{$f})
             {
-              &doLink ($g->{$f}, $l);
+              &doLink ($g->{$f}, $_) for (@l);
             }
         }
 
     }
   elsif (scalar (@view) > 1)
     {
-      my $pack = readlink ("src/$view[1]"); $pack = &dirname ($pack) for (1 .. 2);
+      my $pack = readlink ($view[1]); $pack = &dirname ($pack) for (1 .. 2);
 
       die unless (-d "$pack/$GITPACK/git");
 
@@ -97,6 +97,8 @@ sub init
       die ("No git repository was found\n");
     }
   
+  &mkpath ("$GITPACK/tmp");
+
   'FileHandle'->new (">$gitpack_time");
 }
 
@@ -178,8 +180,8 @@ my @args = @ARGV;
 
 my @view = do { my $fh = 'FileHandle'->new ('<.gmkview'); <$fh> };
 chomp for (@view);
-@view = map { "src/$_" } @view;
-@view = ("$GITPACK/tmp", @view);
+@view = map { "$cwd/src/$_" } @view;
+@view = ("$cwd/$GITPACK/tmp", @view);
 
 $command or exec (@GIT);
 
@@ -207,15 +209,19 @@ sub scanPack
     }
   else
     {
+      my $cwd = &cwd ();
       for my $view (@view)
         {
-          chdir ("$cwd/$view");
+          chdir ($view);
           my $wanted = sub 
           { 
             my $f = $File::Find::name; 
             $p->{$f} ||= 'File::Spec'->rel2abs ($f) if (&ok ($f)) 
           };
-          &find ({wanted => $wanted, no_chdir => 1}, grep { -d } <*>);
+          if (my @dir = grep { -d } <*>)
+            {
+              &find ({wanted => $wanted, no_chdir => 1}, @dir); 
+            }
           chdir ($cwd);
         }
      
@@ -332,7 +338,7 @@ for my $f (@f)
             # Check it does exist in parent pack
             for my $view (@view[2,$#view])
               {
-                last if ($exists = -f "$cwd/$view/$f");
+                last if ($exists = -f "$view/$f");
               }
             if ($exists)
               {
@@ -400,24 +406,24 @@ if ($w)
         # This file has already been looked at earlier; skip it
         next MAIN if (&newer ($gitpack_time, $g->{$f}, $stgitpack_time, $stf));
        
-        if (my $stl = stat ("$cwd/$view[0]/$f"))
+        if (my $stl = stat ("$view[0]/$f"))
           {
             unless ($stl->size) 
               {
                 # File was marked as removed in tmp directory, but was retrieved by a checkout
                 # Remove the zero sized file
-                &doUnlink ("$cwd/$view[$_]/$f") for (0 .. 1);
+                &doUnlink ("$view[$_]/$f") for (0 .. 1);
               }
           }
 
         for my $view (@view[2..$#view])
           {
-            my $v = "$cwd/$view/$f";
+            my $v = "$view/$f";
             next unless (my $stv = stat ($v));
             if (&testEqualFiles ($g->{$f}, $v, $stf, $stv))
               {
                 # File exists and is the same as in the git repo, remove local copy
-                &doUnlink ("$cwd/$view[$_]/$f") for (0 .. 1);
+                &doUnlink ("$view[$_]/$f") for (0 .. 1);
                 next MAIN;
               }
             else
@@ -446,7 +452,7 @@ if ($w)
         next if (-f "$cwd/$GITPACK/git/$f");
         for my $view (@view[0,1])
           {
-            my $g = "$cwd/$view/$f";
+            my $g = "$view/$f";
             &doZeroFile ($g); 
           }
       }
