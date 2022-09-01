@@ -191,7 +191,7 @@ EOF
     }
 }
 
-my @opts_f = qw (verbose init bash help check);
+my @opts_f = qw (verbose init bash help check force-r force-w);
 my @opts_s = qw (repository);
 
 sub help
@@ -228,13 +228,20 @@ if (@ARGV && ($ARGV[0] =~ m/^-/o))
         &help (%opts);
         exit (0);
       }
+    elsif ($opts{'force-r'})
+      {
+        &r ();
+        exit (0);
+      }
+    elsif ($opts{'force-w'})
+      {
+        &w ();
+        exit (0);
+      }
   }
 
 my $command = shift;
 my @args = @ARGV;
-
-my @view = &getView ();
-unshift (@view, "$cwd/$GITPACK/tmp");
 
 $command or exec (@GIT);
 
@@ -364,6 +371,9 @@ my $stgitpack_time = stat ($gitpack_time);
 
 sub r
 {
+  my @view = &getView ();
+  unshift (@view, "$cwd/$GITPACK/tmp");
+
   # Compare tmp and local and see what has changed
 
   my $v0 = &scanPack ($view[0]); # Scan tmp
@@ -440,6 +450,9 @@ sub r
 
 sub w
 {
+  my @view = &getView ();
+  unshift (@view, "$cwd/$GITPACK/tmp");
+
   my $g = &scanPack ("$GITPACK/git");
 
   # Add new files from repository to tmp and local
