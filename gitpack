@@ -36,15 +36,23 @@ sub run
 
 my $gitpack_time = "$GITPACK/time";
 
+sub getView
+{
+  my @view = do { my $fh = 'FileHandle'->new ('<.gmkview'); <$fh> };
+  chomp for (@view);
+  my $cwd = &cwd ();
+  @view = map { "$cwd/src/$_" } @view;
+  return @view;
+}
+
 sub init
 {
   my %opts = @_;
   return if (-d "$GITPACK");
-  my @view = do { my $fh = 'FileHandle'->new ('<.gmkview'); <$fh> };
-  chomp for (@view);
 
   my $cwd = &cwd ();
-  @view = map { "$cwd/src/$_" } @view;
+
+  my @view = &getView ();
 
   if (my $git = $opts{repository})
     {
@@ -102,6 +110,40 @@ sub init
   'FileHandle'->new (">$gitpack_time");
 }
 
+sub check
+{
+  my @view = &getView ();
+
+  my $cwd = &cwd ();
+
+  my $p = &scanPack (@view);
+  my $g = &scanPack ("$cwd/$GITPACK/git");
+
+  my @f = sort keys (%{ {%$p, %$g} });
+
+  for my $f (@f)
+    {
+      my $stp = $p->{$f} && stat ($p->{$f});
+      my $stg = $g->{$f} && stat ($g->{$f});
+      if ($p->{$f} && $g->{$f})
+        {
+          unless (&testEqualFiles ($p->{$f}, $g->{$f}))
+            {
+              print "M $f\n";
+            }
+        }
+      elsif ($p->{$f} && (! $g->{$f}))
+        {
+          print "+ $f\n";
+        }
+      elsif ((! $p->{$f}) && $g->{$f})
+        {
+          print "- $f\n";
+        }
+    }
+}
+
+
 my $cwd = &cwd ();
 
 my %opts;
@@ -141,7 +183,7 @@ EOF
     }
 }
 
-my @opts_f = qw (verbose init bash help);
+my @opts_f = qw (verbose init bash help check);
 my @opts_s = qw (repository);
 
 sub help
@@ -168,6 +210,11 @@ if (@ARGV && ($ARGV[0] =~ m/^-/o))
         &bash (%opts);
         exit (0);
       }
+    elsif ($opts{check})
+      {
+        &check (%opts);
+        exit (0);
+      }
     elsif ($opts{help})
       {
         &help (%opts);
@@ -178,10 +225,8 @@ if (@ARGV && ($ARGV[0] =~ m/^-/o))
 my $command = shift;
 my @args = @ARGV;
 
-my @view = do { my $fh = 'FileHandle'->new ('<.gmkview'); <$fh> };
-chomp for (@view);
-@view = map { "$cwd/src/$_" } @view;
-@view = ("$cwd/$GITPACK/tmp", @view);
+my @view = &getView ();
+unshift (@view, "$cwd/$GITPACK/tmp");
 
 $command or exec (@GIT);
 
