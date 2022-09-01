@@ -201,6 +201,14 @@ sub help
       . " Commands:\n" . join ('', map { "   * $_\n" } (@r, @w));
 }
 
+my $stgitpack_time = stat ($gitpack_time);
+
+sub resetTime
+{
+  utime (0, 0, $gitpack_time);
+  $stgitpack_time = stat ($gitpack_time);
+}
+
 if (@ARGV && ($ARGV[0] =~ m/^-/o))
   {
     &GetOptions
@@ -230,11 +238,13 @@ if (@ARGV && ($ARGV[0] =~ m/^-/o))
       }
     elsif ($opts{'force-r'})
       {
+        &resetTime ();
         &r ();
         exit (0);
       }
     elsif ($opts{'force-w'})
       {
+        &resetTime ();
         &w ();
         exit (0);
       }
@@ -367,7 +377,6 @@ sub newer
   return $stf->mtime > $stg->mtime;
 }
 
-my $stgitpack_time = stat ($gitpack_time);
 
 sub r
 {
