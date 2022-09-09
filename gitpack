@@ -498,7 +498,7 @@ sub w
               last;
             }
          }
-      &doLink ($g->{$f}, "$cwd/$view[$_]/$f") for (0 .. 1);
+      &doLink ($g->{$f}, "$view[$_]/$f") for (0 .. 1);
     }
 
   # Remove files from tmp and local, when they have vanished from repository
