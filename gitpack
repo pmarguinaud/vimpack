@@ -310,7 +310,7 @@ sub ok
 {
   my $f = shift;
   return unless (-f $f);
-  return if ($f =~ m/\.(?:lst|optrpt|o|mod|ok)$/o);
+  return if ($f =~ m/\.(?:lst|optrpt|o|mod|ok|swp)$/o);
   return if ($f =~ m,odb/ddl\.\w+/\w+.(?:c|h|ddl_),o);
   return 1;
 }
