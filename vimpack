@@ -17,10 +17,24 @@ Philippe.Marguinaud@meteo.fr
 
 use strict;
 use FindBin qw ($Bin);
-use lib "$Bin/lib";
+use File::Basename;
+use File::Spec;
+
+our $BIN;
+
+use lib do 
+{ 
+  ($BIN, my $exe) = ($Bin, $0);
+  for (1 .. 100)
+    {
+      last unless (-l $exe);
+      $exe = 'File::Spec'->rel2abs (readlink ($exe), $BIN);
+      $BIN = &dirname ($exe);
+    }
+  "$BIN/lib" 
+};
 
 use FileHandle;
-use File::Basename;
 use Getopt::Long;
 use Data::Dumper;
 use File::Path;
@@ -64,7 +78,7 @@ helptags $dHLP
 if has('perl')
 
 perl <<
-use lib "$Bin/lib"; 
+use lib "$BIN/lib"; 
 use strict; 
 use warnings; 
 use vimpack; 

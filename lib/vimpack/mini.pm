@@ -74,8 +74,8 @@ sub wanted_windex_
       push @{ $sindex->{&basename ($f)} }, $f;
     }
 
-# only fortran for now
-  return unless ($f =~ m/\.F(?:90)?$/io);
+# fortran & C & C++
+  return unless ($f =~ m/\.(f90|f|c|cc)$/io);
 
   $callback && $callback->($f);
 
