@@ -312,6 +312,7 @@ sub ok
   return unless (-f $f);
   return if ($f =~ m/\.(?:lst|optrpt|o|mod|ok|swp)$/o);
   return if ($f =~ m,odb/ddl\.\w+/\w+.(?:c|h|ddl_),o);
+  return if ($f =~ m/\.(?:F90|F)\.xml$/o);
   return 1;
 }
 
@@ -432,6 +433,8 @@ sub r
           push @c, $f;
         }
     }
+
+  print &Dumper ([p => \@p, m => \@m, c => \@c, z => \@z]);
   
   # Add new/modified files
   
