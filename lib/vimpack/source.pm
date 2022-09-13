@@ -4,8 +4,30 @@ use strict;
 
 use Data::Dumper;
 use File::Basename;
+use File::stat;
+use File::Copy;
+use File::Temp;
+use Fcntl 'S_IWUSR';
 
 use base qw (vimpack::file);
+
+sub singleLink
+{
+  my $file = shift;
+
+  return unless (my $st = stat ($file));
+  return unless ($st->cando (S_IWUSR, 1));
+
+  # Make file single link
+  if ($st->nlink > 1)
+    {
+      my $fh = 'File::Temp'->new (); 
+      &copy ($file, $fh->filename ());
+      unlink ($file);
+      &copy ($fh->filename (), $file);
+    }
+  
+}
 
 sub new
 {
@@ -26,7 +48,15 @@ sub do_edit
 
   my $edtr = $args{editor};
 
-  &VIM::DoCommand ("e $self->{file}");
+  if ($self->islocal () || $self->istmp ())
+    {
+      &singleLink ($self->{file});
+      &VIM::DoCommand ("e $self->{file}");
+    }
+  else
+    {
+      &VIM::DoCommand ("view $self->{file}");
+    }
 
   if ($args{line})
     {
@@ -273,11 +303,14 @@ sub do_diff
       $P1 = $P3;
     }
 
-  &VIM::DoCommand ("e $P1");
-# diff with P2
-  &VIM::DoCommand ("vert diffsplit $P2");
+  &singleLink ($P1);
+
+# Edit base file readonly
+  &VIM::DoCommand ("view $P2");
+# diff with P1
+  &VIM::DoCommand ("vert diffsplit $P1");
 # change to left window
-  &VIM::DoCommand ("wincmd l");
+  &VIM::DoCommand ("wincmd r");
 
 }
 
