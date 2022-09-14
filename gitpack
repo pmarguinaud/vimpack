@@ -434,7 +434,7 @@ sub r
         }
     }
 
-  print &Dumper ([p => \@p, m => \@m, c => \@c, z => \@z]);
+# print &Dumper ([p => \@p, m => \@m, c => \@c, z => \@z]);
   
   # Add new/modified files
   
