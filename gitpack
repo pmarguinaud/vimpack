@@ -469,12 +469,42 @@ sub w
 
   # Add new files from repository to tmp and local
 
+  my $remove_if_in_parent = sub
+  {
+    my ($f, $stf) = @_;
+    for my $view (@view[2..$#view])
+      {
+        my $v = "$view/$f";
+        next unless (my $stv = stat ($v));
+        if (&testEqualFiles ($g->{$f}, $v, $stf, $stv))
+          {
+            # File exists and is the same as in the git repo, remove local copy
+            &doUnlink ("$view[$_]/$f") for (0 .. 1);
+            return 1;
+          }
+        else
+          {
+            return 0;
+          }
+       }
+     return 0;
+  };
+
   MAIN: for my $f (sort keys (%$g))
     {
       my $stf = stat ($g->{$f});
    
       # This file has already been looked at earlier; skip it
-      next MAIN if (&newer ($gitpack_time, $g->{$f}, $stgitpack_time, $stf));
+      if (&newer ($gitpack_time, $g->{$f}, $stgitpack_time, $stf))
+        {
+          # If the file has not been checkout out by git  and is identical in git repo and parent pack
+          # we need to remove it from local & tmp
+          if (-f "$view[0]/$f")
+            {
+              $remove_if_in_parent->($f, $stf);
+            }
+          next MAIN;
+        }
      
       if (my $stl = stat ("$view[0]/$f"))
         {
@@ -486,21 +516,8 @@ sub w
             }
         }
 
-      for my $view (@view[2..$#view])
-        {
-          my $v = "$view/$f";
-          next unless (my $stv = stat ($v));
-          if (&testEqualFiles ($g->{$f}, $v, $stf, $stv))
-            {
-              # File exists and is the same as in the git repo, remove local copy
-              &doUnlink ("$view[$_]/$f") for (0 .. 1);
-              next MAIN;
-            }
-          else
-            {
-              last;
-            }
-         }
+      next MAIN if ($remove_if_in_parent->($f, $stf));
+
       &doLink ($g->{$f}, "$view[$_]/$f") for (0 .. 1);
     }
 
