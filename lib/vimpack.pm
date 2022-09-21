@@ -21,6 +21,9 @@ use DB_File;
 use List::Util qw (min max);
 use Fcntl qw (O_RDONLY);
 
+use File::Temp;
+use File::Copy;
+use File::stat;
 use File::Spec;
 use File::Find qw ();
 use File::Basename;
@@ -587,6 +590,11 @@ sub ucom
 sub UCOM
 {
   my ($self, %args) = @_;
+
+  if (my $file = $self->getcurfile ())
+    {
+      $file->singleLink ();
+    }
 
   eval
     {

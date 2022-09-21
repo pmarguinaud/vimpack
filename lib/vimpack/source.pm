@@ -4,16 +4,29 @@ use strict;
 
 use Data::Dumper;
 use File::Basename;
-use File::stat;
-use File::Copy;
-use File::Temp;
-use Fcntl 'S_IWUSR';
 
 use base qw (vimpack::file);
 
+sub new
+{
+  my $class = shift;
+  my $self = bless { @_ }, $class;
+
+  $self->{lang} ||= 'vimpack::lang'->lang ($self->{file});
+
+  return $self;
+}
+
 sub singleLink
 {
-  my $file = shift;
+  use File::Copy;
+  use File::Temp;
+  use File::stat;
+  use Fcntl 'S_IWUSR';
+
+  my $self = shift;
+
+  my $file = $self->{file};
 
   return unless (my $st = stat ($file));
   return unless ($st->cando (S_IWUSR, 1));
@@ -30,16 +43,6 @@ sub singleLink
   
 }
 
-sub new
-{
-  my $class = shift;
-  my $self = bless { @_ }, $class;
-
-  $self->{lang} ||= 'vimpack::lang'->lang ($self->{file});
-
-  return $self;
-}
-
 sub do_edit
 {
 
@@ -51,7 +54,6 @@ sub do_edit
 
   if ($self->islocal () || $self->istmp ())
     {
-      &singleLink ($self->{file});
       &VIM::DoCommand ("e $self->{file}");
     }
   else
@@ -303,8 +305,6 @@ sub do_diff
       &vimpack::tools::copy (fi => $P1, fo => $P3, fhlog => $edtr->{fhlog});
       $P1 = $P3;
     }
-
-  &singleLink ($P1);
 
 # Edit base file readonly
   &VIM::DoCommand ("view $P2");
