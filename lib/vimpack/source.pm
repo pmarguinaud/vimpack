@@ -25,6 +25,7 @@ sub singleLink
       &copy ($file, $fh->filename ());
       unlink ($file);
       &copy ($fh->filename (), $file);
+      utime ($st->atime, $st->mtime, $file);
     }
   
 }
