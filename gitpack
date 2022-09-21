@@ -19,6 +19,8 @@ my $HOME = (getpwuid ($>))[7];
 sub bt
 { 
   print @_;
+
+  print "\n";
   for (my $i = 0; ; $i++)
     {
       last unless (my @call = caller ($i));
@@ -326,11 +328,9 @@ sub ok
       return if ($f =~ $m);
     }
 
-  return if ($f =~ m,^(?:nemo|atlas_apps|wam|oopsifs|climfield|enkf|glomap|prepdata|scmec|ssa)/,o);
   return if ($f =~ m/\.(?:lst|optrpt|o|mod|ok|swp)$/o);
   return if ($f =~ m,odb/ddl\.\w+/\w+.(?:c|h|ddl_),o);
   return if ($f =~ m/\.(?:F90|F)\.xml$/o);
-  return if ($f =~ m/\.gitignore$/o);
 
   return 1;
 }
@@ -461,6 +461,9 @@ sub r
     {
       &doLink ($v1->{$f}, "$PACK/$GITPACK/tmp/$f");
       &doLink ($v1->{$f}, "$PACK/$GITPACK/git/$f"); 
+    }
+  for my $f (@p)
+    {
       &git (cmd => ['add', '-f', $f], die => 1);
     }
   
@@ -564,6 +567,12 @@ sub w
     }
 
 }
+
+
+unless (-d "$PACK/$GITPACK")
+  {
+    die ("`$PACK/$GITPACK' was not found\n");
+  }
 
 
 #####        First part : update git repository with local changes         #####
