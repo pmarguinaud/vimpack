@@ -411,6 +411,7 @@ sub r
   my @f = keys (%{ {%$v0, %$v1} });
   
   my (@p, @m, @c, @z); # +, -, changed, zero
+  my @g; # + in git repo
   
   for my $f (@f)
     {
@@ -446,6 +447,7 @@ sub r
       elsif ($f1 && (! $f0))
         {
           push @p, $f;
+          push @g, $f unless (-f "$PACK/$GITPACK/git/$f");
         }
       elsif (! &testEqualFiles ($f0, $f1, $stf0, $stf1))
         {
@@ -462,7 +464,7 @@ sub r
       &doLink ($v1->{$f}, "$PACK/$GITPACK/tmp/$f");
       &doLink ($v1->{$f}, "$PACK/$GITPACK/git/$f"); 
     }
-  for my $f (@p)
+  for my $f (@g)
     {
       &git (cmd => ['add', '-f', $f], die => 1);
     }
