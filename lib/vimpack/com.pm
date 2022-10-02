@@ -14,14 +14,36 @@ sub style
   &VIM::DoCommand (':hi def Remark cterm=underline ctermfg=yellow');
 }
 
+sub intelOptrpt
+{
+  my ($p_line, $h_message) = @_;
+
+  my ($File, $Line, $Column);
+
+  while (defined (my $line = shift (@$p_line)))
+    {
+      if ($line =~ m/^\s*LOOP BEGIN at (\S+)\((\d+),(\d+)\)\s*$/o)
+        {
+          ($File, $Line, $Column) = ($1, $2, $3);
+          $Column ||= 1; $Column--; $Line--;
+        }
+      elsif ($line =~ m/^\s*LOOP END/o)
+        {
+          return;
+        }
+      elsif ($line =~ m/^\s*(remark|warning|error) #\d+: (.*)$/o)
+        {
+          my ($Level, $Message) = ($1, $2);
+          $h_message->{$File}[$Line][$Column]{$Level}{$Message} = 1;
+        }
+    }
+}
+
 sub insert
 {
   my ($class, %args) = @_;
 
-  my $win = $args{win};
-  my $buf = $args{buf};
-  my $lst = $args{lst};
-  my $src = $args{src};
+  my ($win, $buf, $lst, $src) = @args{qw (win buf lst src)};
 
   $class->style ();
 
@@ -45,22 +67,27 @@ sub insert
       return;
     }
 
-  my @lines = <$fh>;
+  my @line = <$fh>;
   $fh->close ();
 
   $src = &basename ($src);
   
   my %Message;
-  while (defined (my $line = shift (@lines)))
+  while (defined (my $line = shift (@line)))
     {
       chomp ($line);
-
-# Intel Fortran compiler
-      if ($line =~ m/^(\S*?)\((\d+)\):\s*(?:\(col\.\s*(\d+)\))?\s+(\S+?)(?:\s+\#\d+)?:\s*(\S.*\S)/o)
+# Intel Fortran compiler .lst
+      if (($lst =~ m/\.lst$/o) && ($line =~ m/^(\S+)\((\d+)\): (warning|remark|error) #\d+: (.*)$/o))
         {
-          my ($File, $Line, $Column, $Level, $Message) = ($1, $2, $3, $4, $5);
+          my ($File, $Line, $Column, $Level, $Message) = ($1, $2, 1, $3, $4);
           $Column ||= 1; $Column--; $Line--;
           $Message{$File}[$Line][$Column]{$Level}{$Message} = 1;
+        }
+# Intel Fortran compiler .optrpt
+      elsif (($lst =~ m/\.optrpt$/o) && ($line =~ m/^LOOP BEGIN at \S+\(\d+,\d+\)$/o))
+        {
+          unshift (@line, $line);
+          &intelOptrpt (\@line, \%Message);
         }
 # GNU Fortran compiler
       elsif ($line =~ m/^(\S+):(\d+)\.(\d+):$/o)
@@ -68,7 +95,7 @@ sub insert
           my ($File, $Line, $Column) = ($1, $2, $3);
           $Line--;
           $File = &basename ($File);
-          while (defined (my $l = shift (@lines)))
+          while (defined (my $l = shift (@line)))
             {
               if ($l =~ m/^(Warning|Error):\s*(\S.*\S)$/o)
                 {
@@ -157,8 +184,7 @@ sub remove
 {
   my ($class, %args) = @_;
 
-  my $win = $args{win};
-  my $buf = $args{buf};
+  my ($win, $buf) = @args{qw (win buf)};
 
   my @text = map { $buf->Get ($_) . "\n" } (1 .. $buf->Count ());
   my $text = join ('', @text);

@@ -110,6 +110,8 @@ autocmd BufWritePost  *  :perl $::EDITOR->COMMIT (auto => 1)
 autocmd BufWritePre   *  :perl $::EDITOR->UCOM (auto => 1);
 command! -nargs=0 WI     :perl $::EDITOR->ICOM ();
 command! -nargs=0 WR     :perl $::EDITOR->UCOM ();
+command! -nargs=0 OI     :perl $::EDITOR->IOPT ();
+command! -nargs=0 OR     :perl $::EDITOR->UCOM ();
 
 autocmd BufWinEnter   *  :perl $::EDITOR->ICOM (auto => 1);
 EOF

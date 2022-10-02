@@ -554,6 +554,33 @@ sub icom
     }
 }
 
+sub iopt
+{
+  my ($self, %args) = @_;
+
+  my $curwin = $self->getcurwin ();
+  my $curbuf = $self->getcurbuf ();
+
+  my $s = &basename ($curbuf->Name ());
+  my $p = "$s.optrpt";
+
+  my ($sindex, $SINDEX) = $self->getsindex (qw (sindex SINDEX));
+
+  my ($P) = (($sindex->{$p} ? ($sindex->{$p}) : ()), split (m/\s+/o, $SINDEX->{$p}));
+  my ($S) = (($sindex->{$s} ? ($sindex->{$s}) : ()), split (m/\s+/o, $SINDEX->{$s}));
+
+  unless (-f $P)
+    {
+      $p =~ s/\.(?:F(?:90)|c)\.optrpt$/.optrpt/io;
+      ($P) = (($sindex->{$p} ? ($sindex->{$p}) : ()), split (m/\s+/o, $SINDEX->{$p}));
+    }
+
+  if ($P)
+    {
+      'vimpack::com'->insert (win => $curwin, buf => $curbuf, lst => $P, src => $S, %args);
+    }
+}
+
 sub ICOM
 {
   my ($self, %args) = @_;
@@ -570,6 +597,28 @@ sub ICOM
           @opts = (silent => 1);
         }
       $self->icom (@opts);
+    };
+
+  $self->reportbug ($@);
+
+}
+
+sub IOPT
+{
+  my ($self, %args) = @_;
+
+  my $fhlog = $self->{fhlog};
+  $fhlog && $fhlog->print (&Dumper (['IOPT', \%args]));
+
+  eval
+    {
+      my @opts;
+      if ($args{auto})
+        {
+          return if (! $self->{WARN});
+          @opts = (silent => 1);
+        }
+      $self->iopt (@opts);
     };
 
   $self->reportbug ($@);
