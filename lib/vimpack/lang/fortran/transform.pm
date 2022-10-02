@@ -52,7 +52,7 @@ CHECK2:
         if ($stf->mtime <= $stx->mtime);
     }
 
-  if (system ($fxtran, qw (-show-lines -no-cpp -construct-tag), -o => $xml, $file))
+  if (system ($fxtran, qw (-show-lines -no-cpp -construct-tag -line-length 512), -o => $xml, $file))
     {
       &VIM::Msg (sprintf ("Failed to parse `%s'", &basename ($file)));
       return;
@@ -74,14 +74,10 @@ sub xml_find_node_by_row_col
 {
   my ($class, %args) = @_;
 
-  my $dom = $args{dom};
-  my $xpc = $args{xpc};
-
 # row starts from 1, col from 0
-  my $row = $args{row};
-  my $col = $args{col};
+  my ($dom, $xpc, $row, $col) = @args{qw (dom xpc row col)};
 
-  my ($L) = $xpc->findnodes ('(.//f:L)[' . $row . ']', $dom);
+  my ($L) = $xpc->findnodes ("(.//f:L)[$row]", $dom);
 
   my $N = $L;
   my ($col1, $col2) = (0);

@@ -17,6 +17,8 @@ Philippe.Marguinaud@meteo.fr
 
 use strict;
 use FindBin qw ($Bin);
+use lib "$Bin/perl5";
+
 use File::Basename;
 use File::Spec;
 
@@ -31,7 +33,7 @@ use lib do
       $exe = 'File::Spec'->rel2abs (readlink ($exe), $BIN);
       $BIN = &dirname ($exe);
     }
-  "$BIN/lib" 
+  ("$BIN/lib", "$BIN/perl5")
 };
 
 use FileHandle;
@@ -78,7 +80,7 @@ helptags $dHLP
 if has('perl')
 
 perl <<
-use lib "$BIN/lib"; 
+use lib "$BIN/lib", "$BIN/perl5";
 use strict; 
 use warnings; 
 use vimpack; 
