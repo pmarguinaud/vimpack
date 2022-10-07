@@ -169,7 +169,7 @@ sub git
   return ! $c;
 }
 
-my @r = qw (branch push status log show commit fetch diff);
+my @r = qw (branch push status log show commit fetch diff tag);
 my @w = qw (checkout pull merge reset);
 
 sub bash
