@@ -428,7 +428,7 @@ sub r
             {
               my $exists = 0;
               # Check it does exist in parent pack
-              for my $view (@view[2,$#view])
+              for my $view (@view[2..$#view])
                 {
                   last if ($exists = -f "$view/$f");
                 }
