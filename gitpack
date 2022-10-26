@@ -62,6 +62,7 @@ sub init
       &mkpath ("$GITPACK/git");
       &run ("cp -alf $git/* ./$GITPACK/git/");
       &run ("cp -r $git/.git ./$GITPACK/git/.git");
+      &run (@GIT, checkout => $opts{branch}) if ($opts{branch});
       
       my $g = &scanPack ("$PACK/$GITPACK/git");
 
@@ -169,7 +170,7 @@ sub git
   return ! $c;
 }
 
-my @r = qw (branch push status log show commit fetch diff tag);
+my @r = qw (branch push status log show commit fetch diff tag remote);
 my @w = qw (checkout pull merge reset);
 
 sub bash
@@ -187,7 +188,7 @@ EOF
 }
 
 my @opts_f = qw (verbose init bash help check force-r force-w dont-remove-identical-files);
-my @opts_s = qw (repository);
+my @opts_s = qw (repository branch);
 
 sub help
 {
