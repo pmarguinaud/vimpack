@@ -1,0 +1,158 @@
+#!/usr/bin/perl -w
+#
+
+use strict;
+use FileHandle;
+use File::stat;
+use File::Copy;
+use File::Basename;
+use Getopt::Long;
+use Data::Dumper;
+
+sub slurp
+{
+  my $f = shift;
+  my $data = do { local $/ = undef; my $fh = 'FileHandle'->new ("<$f"); <$fh> };
+  return $data;
+}
+
+sub eq
+{
+  my ($f, $g) = @_;
+  return &slurp ($f) eq &slurp ($g);
+}
+
+sub script
+{
+  'FileHandle'->new ('>' . $_[0])->print ($_[1]);
+  chmod (0755, $_[0]);
+}
+
+my %opts = qw (type xterm);
+my @opts_s = qw (type);
+my @opts_f = qw (log);
+
+&GetOptions 
+(
+  (map { ("$_=s" => \$opts{$_}) } @opts_s),
+  (map { ($_ => \$opts{$_}) } @opts_f),
+);
+
+my @cmd = @ARGV;
+
+exit (0) unless (system (@cmd));
+
+my $user = getpwuid ($<);
+
+my $log = sub { };
+
+if ($opts{log})
+  {
+     my $fhlog = 'FileHandle'->new ('>>/tmp/' . &basename ($0) . ".$user.log");
+     $fhlog->autoflush (1);
+
+     *STDOUT = $fhlog;
+     *STDERR = $fhlog;
+
+     $log = sub { print @_ };
+  }
+
+sub xcopy 
+{
+  my ($f, $g) = @_;
+  $log->("copy ($f, $g)\n");
+  &copy ($f, $g);
+}
+
+my ($pack, $file) = @ENV{qw (TARGET_PACK GMK_CURRENT_FILE)};
+
+$log->(&Dumper (\%opts));
+$log->(&Dumper (\@cmd));
+$log->("pack=$pack\n");
+$log->("file=$file\n");
+
+# Copy file to current temporary directory
+my $temp = &basename ($file);
+$log->("temp=$temp\n");
+
+unless (-l $temp)
+  {
+    $log->("$temp was not found\n");
+    die;
+  }
+
+my $orig = readlink ($temp);
+$log->("orig=$orig\n");
+
+unlink ($temp);
+
+&xcopy ($orig, $temp);
+
+# Create scripts
+
+mkdir ('.bin');
+
+&script ('.bin/run.sh', << "EOF");
+#!/bin/bash
+set -x
+exec @cmd
+EOF
+
+&script ('.bin/bashrc', << 'EOF');
+
+if [ -f ~/.bashrc ]
+then
+  . ~/.bashrc
+fi
+
+if [ -f ~/.bash_profile ]
+then
+  . ~/.bash_profile
+fi
+
+alias run='./.bin/run.sh'
+
+EOF
+
+&script ('.bin/shell.sh', << 'EOF');
+#!/bin/bash
+./.bin/run.sh 
+exec bash --init-file ./.bin/bashrc -i
+EOF
+
+# Start interactive session
+
+if ($opts{type} eq 'xterm')
+  {
+    my @xterm = qw (xterm +sb -bg black -fg grey70 -geometry 150x60+0+0 -e ./.bin/shell.sh);
+    system (@xterm);
+  }
+elsif ($opts{type} eq 'screen')
+  {
+    if (my $pid = fork ())
+      {
+        $log->("pid=$pid\n");
+        waitpid ($pid, 0);
+      }
+    else
+      {
+        my @screen = qw (screen -S f90shell -D -m ./.bin/shell.sh);
+        exec (@screen);
+      }
+  }
+else
+  {
+    $log->("Unknown type : $opts{type}");
+  }
+
+# Copy back changes to local pack if any
+unless (&eq ($orig, $temp))
+  {
+    &xcopy ($temp, "$pack/src/local/$file") if (-f $temp);
+  }
+
+# Compile once more, to check everythning is OK
+exec (@cmd);
+
+
+
