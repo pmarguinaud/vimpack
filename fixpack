@@ -43,18 +43,26 @@ my @cmd = @ARGV;
 exit (0) unless (system (@cmd));
 
 my $user = getpwuid ($<);
+my $prog = &basename ($0, qw (.pl));
 
 my $log = sub { };
 
 if ($opts{log})
   {
-     my $fhlog = 'FileHandle'->new ('>>/tmp/' . &basename ($0) . ".$user.log");
+     my $fhlog = 'FileHandle'->new (">>/tmp/$prog.$user.log");
      $fhlog->autoflush (1);
 
      *STDOUT = $fhlog;
      *STDERR = $fhlog;
 
-     $log = sub { print @_ };
+     $log = sub 
+     { 
+       use POSIX;
+       print "==$$== ";
+       print strftime ("%F %T", localtime time);
+       print " ";
+       print @_ 
+     };
   }
 
 sub xcopy 
@@ -110,7 +118,8 @@ then
   . ~/.bash_profile
 fi
 
-alias run='./.bin/run.sh'
+alias r='./.bin/run.sh'
+alias e='vi *.F90'
 
 EOF
 
@@ -136,7 +145,7 @@ elsif ($opts{type} eq 'screen')
       }
     else
       {
-        my @screen = qw (screen -S f90shell -D -m ./.bin/shell.sh);
+        my @screen = (qw (screen -S), $prog, qw (-D -m ./.bin/shell.sh));
         exec (@screen);
       }
   }
