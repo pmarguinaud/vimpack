@@ -74,27 +74,34 @@ sub xcopy
 
 my ($pack, $file) = @ENV{qw (TARGET_PACK GMK_CURRENT_FILE)};
 
+$file ||= '';
+
 $log->(&Dumper (\%opts));
 $log->(&Dumper (\@cmd));
 $log->("pack=$pack\n");
-$log->("file=$file\n");
+$log->("file=$file\n") if ($file);
 
-# Copy file to current temporary directory
-my $temp = &basename ($file);
-$log->("temp=$temp\n");
+my ($temp, $orig) = ('', '');
 
-unless (-l $temp)
+if ($file)
   {
-    $log->("$temp was not found\n");
-    die;
+    # Copy file to current temporary directory
+    $temp = &basename ($file);
+    $log->("temp=$temp\n");
+    
+    unless (-l $temp)
+      {
+        $log->("$temp was not found\n");
+        die;
+      }
+    
+    $orig = readlink ($temp);
+    $log->("orig=$orig\n");
+    
+    unlink ($temp);
+    
+    &xcopy ($orig, $temp);
   }
-
-my $orig = readlink ($temp);
-$log->("orig=$orig\n");
-
-unlink ($temp);
-
-&xcopy ($orig, $temp);
 
 # Create scripts
 
@@ -106,7 +113,7 @@ set -x
 exec @cmd
 EOF
 
-&script ('.bin/bashrc', << 'EOF');
+&script ('.bin/bashrc', << "EOF");
 
 if [ -f ~/.bashrc ]
 then
@@ -118,10 +125,13 @@ then
   . ~/.bash_profile
 fi
 
+export PS1="$prog> "
+
 alias r='./.bin/run.sh'
-alias e='vi *.F90'
+alias e="vi $temp"
 
 EOF
+
 
 &script ('.bin/shell.sh', << 'EOF');
 #!/bin/bash
@@ -154,10 +164,13 @@ else
     $log->("Unknown type : $opts{type}");
   }
 
-# Copy back changes to local pack if any
-unless (&eq ($orig, $temp))
+if ($file)
   {
-    &xcopy ($temp, "$pack/src/local/$file") if (-f $temp);
+    # Copy back changes to local pack if any
+    unless (&eq ($orig, $temp))
+      {
+        &xcopy ($temp, "$pack/src/local/$file") if (-f $temp);
+      }
   }
 
 # Compile once more, to check everythning is OK
