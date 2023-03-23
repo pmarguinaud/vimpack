@@ -1,6 +1,50 @@
 #!/usr/bin/perl -w
 #
 
+package Linux;
+
+use strict;
+use FileHandle;
+use File::Basename;
+use Data::Dumper;
+
+sub getStatus 
+{
+  my $pid = shift;
+  my @attr = do { my $fh = 'FileHandle'->new ("</proc/$pid/status"); <$fh> };
+  my %attr;
+  for my $attr (@attr)
+    {
+      chomp ($attr);
+      my ($k, $v) = ($attr =~ m/^([_\w]+)\s*:\s*(\S.*|)$/o);
+      $attr{$k} = $v;
+    }
+  return \%attr;
+}
+
+sub getPPid 
+{
+  my $pid = shift;
+  my $attr = &getStatus ($pid);
+  return $attr->{PPid};
+}
+
+sub getFd
+{
+  my $pid = shift;
+  my @fd = map { &basename ($_) } </proc/$pid/fd/*>;
+  
+  my %fd;
+  for my $fd (@fd)
+    {
+      $fd{$fd} = readlink ("/proc/$pid/fd/$fd");
+    }
+  return \%fd;
+}
+
+
+package main;
+
 use strict;
 use FileHandle;
 use File::stat;
@@ -30,7 +74,7 @@ sub script
 
 my %opts = qw (type xterm);
 my @opts_s = qw (type);
-my @opts_f = qw (log);
+my @opts_f = qw (log warn);
 
 &GetOptions 
 (
@@ -44,6 +88,16 @@ exit (0) unless (system (@cmd));
 
 my $user = getpwuid ($<);
 my $prog = &basename ($0, qw (.pl));
+
+# Try to get user TTY if any
+
+my $stdout;
+for (my $pid = $$; $pid; $pid = &Linux::getPPid ($pid))
+  {
+    my $fd = &Linux::getFd ($pid);
+    $stdout = $fd->{1};
+    last if ($stdout && ($stdout =~ m,^/dev/pts,o));
+  }
 
 my $log = sub { };
 
@@ -139,6 +193,16 @@ EOF
 exec bash --init-file ./.bin/bashrc -i
 EOF
 
+if ($opts{warn} && $stdout)
+  {
+    'FileHandle'->new (">$stdout")->print (<< "EOF");
+
+
+$prog ready to debug @cmd
+
+EOF
+  }
+
 # Start interactive session
 
 if ($opts{type} eq 'xterm')
@@ -148,16 +212,8 @@ if ($opts{type} eq 'xterm')
   }
 elsif ($opts{type} eq 'screen')
   {
-    if (my $pid = fork ())
-      {
-        $log->("pid=$pid\n");
-        waitpid ($pid, 0);
-      }
-    else
-      {
-        my @screen = (qw (screen -S), $prog, qw (-D -m ./.bin/shell.sh));
-        exec (@screen);
-      }
+    my @screen = (qw (screen -S), $prog, qw (-D -m ./.bin/shell.sh));
+    system (@screen);
   }
 else
   {
