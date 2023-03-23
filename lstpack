@@ -1,0 +1,91 @@
+#!/usr/bin/perl -w
+
+use strict;
+use File::Find;
+use FileHandle;
+use Cwd;
+
+my $diff = @ARGV && ($ARGV[0] eq '-d');
+shift if ($diff);
+my $ibw = @ARGV && ($ARGV[0] eq '-ibw');
+shift if ($ibw);
+
+my $N = shift (@ARGV) || 1;
+
+my $CWD = &cwd ();
+
+my @view = do { my $fh = 'FileHandle'->new ('<.gmkview'); <$fh> };
+chomp for (@view);
+my @VIEW = splice (@view, 0, $N);
+
+sub slurp
+{
+  my $f = shift;
+  my $fh = 'FileHandle'->new ("<$f");
+  local $/ = undef;
+  my $t = <$fh>;
+  return $t;
+}
+
+sub status
+{
+  my $f = shift;
+
+  for my $view (@view)
+    {
+      if (-f (my $g = "$CWD/src/$view/$f"))
+        {
+          return (&slurp ($f) ne &slurp ($g) ? 'M' : '=', $view);
+        }
+    }
+  return ('+', '');
+}
+
+my (%s, %f);
+
+sub wanted
+{
+  my $view = shift;
+
+  return unless (-f (my $f = $File::Find::name));
+  return if ($f =~ m,/(?:\.intfb|\.include)/,o);
+  return if ($f =~ m,\.(?:o|optrpt|lst|list|smod|mod|ok|lst.db)$,o);
+  return if ($f =~ m,\.(?:swp)$,o);
+  return if ($f =~ m,\.fypp/,o);
+  $f =~ s,^\./,,o;
+
+  return if ($f{$f}++);
+
+  my ($s, $v) = &status ($f);
+
+  $s{$s}++;
+
+  printf ("%s %s\n", $s, $f);
+
+  if ($diff && ($s ne '+'))
+    {
+      my @o = $ibw ? ('-ibw') : ();
+      system ('diff', @o, "$CWD/src/$v/$f", "$CWD/src/$view/$f");
+    }
+
+
+}
+
+for my $VIEW (@VIEW)
+  {
+    chdir ("$CWD/src/$VIEW");
+    &find ({wanted => sub { &wanted ($VIEW) }, no_chdir => 1}, '.');
+  }
+
+my %l = qw (= identical + new M modified);
+
+my @l;
+
+while (my ($k, $v) = each (%s))
+  {
+    push @l, sprintf ("%d %s", $v, $l{$k});
+  }
+
+@l && print join (', ', @l) . "\n";
+
+

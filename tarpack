@@ -1,0 +1,121 @@
+#!/usr/bin/perl -w
+
+use strict;
+use FileHandle;
+use Cwd;
+use File::Temp qw (tempdir);
+use File::Find;
+use File::Path;
+use File::Basename;
+use File::Spec;
+use File::Copy;
+use File::stat;
+
+sub ddev
+{
+  my ($d1, $d2) = @_;
+
+  (my $d1st = stat ($d1))
+    or die ("Cannot access $d1: $!\n");
+  
+  (my $d2st = stat ($d2))
+    or die ("Cannot access $d2: $!\n");
+
+  return ($d1st->dev () != $d2st->dev ()) 
+      || ($d1st->uid () != $d2st->uid ());
+
+}
+
+my $dir = &tempdir (CLEANUP => 1, DIR => "$ENV{HOME}/tmp");
+
+my $local = "$dir/src/local";
+
+&mkpath ($local);
+
+my $pwd = &cwd ();
+
+my $PACK = pop (@ARGV);
+
+my $nosrc;
+
+if (@ARGV && ($ARGV[0] eq '--no-src'))
+  {
+    shift (@ARGV);
+    $nosrc = 1;
+  }
+
+my @pack = reverse (@ARGV);
+
+unless (@pack)
+  {
+    @pack = do { (my $fh = 'FileHandle'->new ('<.gmkview')) 
+                 or die ("tarpack should be called from within a pack\n");
+                 my @v = <$fh>; chomp for (@v); @v };
+  }
+
+my %done;
+
+for my $pack (@pack)
+  {
+    chdir ("src/$pack");
+
+    my $ddev = &ddev ('.', $local);
+
+    &find (
+            {
+              wanted => sub
+                            {
+                              my $p = 'File::Spec'->canonpath ($File::Find::name);
+
+                              return if (-d $p);
+
+                              return if ($done{$p}++);
+
+                              my $b = &basename ($p);
+ 
+                              (($p =~ m/(?:\.(?:o|lst|list|mod|ok|swp|optrpt)|~)$/io) || ($b =~ m/^i\..*\.L$/o) || ($b eq 'xref.db')) 
+                                && return;
+                              
+                              my $q = "$local/$p";
+
+                              my $d = &dirname ($q);
+
+                              &mkpath ($d)
+                                unless ($done{$d}++);
+
+                              ($ddev ? &copy ($p, $q) : link ($p, $q))
+                                or die ("Cannot copy $p to $q\n");
+
+                              printf ("src/$pack/$p\n");
+                            },
+              no_chdir => 1,
+            }, <*>
+          );
+
+    chdir ($pwd);
+  }
+
+chdir ($dir);
+
+if ($nosrc)
+  {
+    chdir ('src/local');
+    system ('tar', cf => '../../src.local.tar', '.');
+  }
+else
+  {
+    system ('tar', cf => 'src.local.tar', 'src/local');
+  }
+
+chdir ($pwd);
+
+if ($PACK =~ m/\.(?:tar\.gz|tgz)$/o)
+  {
+    system ('gzip', "$dir/src.local.tar");
+    &move ("$dir/src.local.tar.gz", $PACK);
+  }
+else
+  {
+    &move ("$dir/src.local.tar", $PACK);
+  }
+
