@@ -101,6 +101,13 @@ for (my $pid = $$; $pid; $pid = &Linux::getPPid ($pid))
 
 my $log = sub { };
 
+sub xcopy 
+{
+  my ($f, $g) = @_;
+  $log->("copy ($f, $g)\n");
+  &copy ($f, $g);
+}
+
 if ($opts{log})
   {
      my $fhlog = 'FileHandle'->new (">>/tmp/$prog.$user.log");
@@ -119,14 +126,29 @@ if ($opts{log})
      };
   }
 
-sub xcopy 
-{
-  my ($f, $g) = @_;
-  $log->("copy ($f, $g)\n");
-  &copy ($f, $g);
-}
+my @session;
 
-my ($pack, $file) = @ENV{qw (TARGET_PACK GMK_CURRENT_FILE)};
+if ($opts{type} eq 'xterm')
+  {
+    @session = qw (xterm +sb -bg black -fg grey70 -geometry 150x60+0+0 -e ./.bin/shell.sh);
+  }
+elsif ($opts{type} eq 'screen')
+  {
+    @session = (qw (screen -S), $prog, qw (-D -m ./.bin/shell.sh));
+  }
+else
+  {
+    $log->("Unknown type : $opts{type}");
+  }
+
+# Find file processed by gmkpack
+
+# pack : pack we compile for
+# temp : local file name; symbolic link to original file
+# orig : absolute path to original file
+# file : relative path in pack (without src/local or src/main)
+
+my ($temp, $orig, $pack, $file) = ('', '', @ENV{qw (TARGET_PACK GMK_CURRENT_FILE)});
 
 $file ||= '';
 
@@ -135,7 +157,6 @@ $log->(&Dumper (\@cmd));
 $log->("pack=$pack\n");
 $log->("file=$file\n") if ($file);
 
-my ($temp, $orig) = ('', '');
 
 if ($file)
   {
@@ -203,22 +224,10 @@ $prog ready to debug @cmd
 EOF
   }
 
+
 # Start interactive session
 
-if ($opts{type} eq 'xterm')
-  {
-    my @xterm = qw (xterm +sb -bg black -fg grey70 -geometry 150x60+0+0 -e ./.bin/shell.sh);
-    system (@xterm);
-  }
-elsif ($opts{type} eq 'screen')
-  {
-    my @screen = (qw (screen -S), $prog, qw (-D -m ./.bin/shell.sh));
-    system (@screen);
-  }
-else
-  {
-    $log->("Unknown type : $opts{type}");
-  }
+system (@session);
 
 if ($file)
   {
