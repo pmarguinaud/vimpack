@@ -1,5 +1,5 @@
 
-![](./Images/gmkpack.png)
+![](./Images/gmkpack.jpg)
 
 # vimpack
 
