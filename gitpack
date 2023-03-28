@@ -1,5 +1,83 @@
 #!/usr/bin/perl -w
 
+
+=head1 NAME
+
+gitpack
+
+=head1 SYNOPSIS
+
+  $ cd pack
+  $ cd 48t3_sidyn-spcm.05.IMPIIFC2018.x
+  $ gitpack branch 
+  cy48t3_cpg_drv+
+  cy48t3_cpg_drv+pgi2211+openacc
+  cy48t3_cpg_drv+pgi2211+openacc-link
+  cy48t3_cpg_drv-
+  master
+  merge_CY48T3_and_48R1
+  merge_CY48T3_and_48R1-pm1
+  $ gitpack checkout ...
+  $ ...
+
+=head1 DESCRIPTION
+
+C<gitpack> is a script wrapping C<git>. All git commands are available from
+within a pack.
+
+C<gitpack> will synchronize files between the git repository and the gmkpack
+local view : all changes made to the files located in the local view are copied
+back to the git repository; in return, all git commands such as checkout, merge, 
+etc. will propagate to gmkpack local view.
+
+When synchronizing files to the local view, C<gitpack> will take into account
+existing files in other C<gmkpack> views (main, inter.1, inter.2, etc.)
+
+=head1 INITIALIZING A PACK
+
+In order to use C<gitpack>, a pack has to be initialized. Two possibilities :
+
+=head2 The current pack is derived from another pack, which has already beeen initialized with gitpack:
+
+In this case, running the following command is sufficient :
+
+  $ gitpack --init
+
+The derived pack will inherit the branch of its master pack.
+
+=head2 No gitpack initialisation has been performed in the current pack hierarchy:
+
+It is then necessary to initialize the current pack from an existing git repository; 
+for instance :
+
+  $ gitpack --init --repository $HOME/IAL
+
+=head1 GITPACK CONFIGURATION
+
+It is possible to exclude files from C<gitpack> management; before initializing the pack,
+add a .gitpack.conf. This file may contain a list of regular expressions :
+
+  {
+    ignore => [
+                qr,oops_src/,o,
+                qr,dummies.c,o,
+                qr,dummy/unused/,o,
+                ... 
+              ]
+  }
+
+All files matching one of these regex will not be managed by C<gitpack>.
+
+=head1 SEE ALSO
+
+C<gmkpack>, C<git>
+
+=head1 AUTHOR
+
+pmarguinaud@hotmail.com
+
+=cut
+
 use strict;
 use File::Find;
 use File::Path;
@@ -269,8 +347,9 @@ sub scanPack
 {
   my @view = @_;
 
-  my $key = join (',', @view); $key =~ s,/,+,go;
-  my $file = "$GITPACK/scan/scan.$key.pl";
+  use Digest::MD5;
+  my $key = join ('-', map ({ &Digest::MD5::md5_hex ($_) } @view)); 
+  my $file = "$GITPACK/scan/$key.pl";
 
   my $p = {};
 

@@ -6,7 +6,12 @@ vimpack
 
 =head1 DESCRIPTION
 
-A pack editor based on vim; a vim compiled with the embedded Perl interpreter has to be available in your PATH
+A pack editor based on vim; a vim compiled with the embedded Perl interpreter has to be available in your PATH.
+Help is available in vim: type C<:help vimpack> from within vimpack.
+
+=head1 SEE ALSO
+
+C<gmkpack>
 
 =head1 AUTHOR
 
@@ -167,7 +172,7 @@ EOF
 $hCOM->print (<< "EOF");
 
 else
-  echohl WarningMsg | echo "Vim requires en embedded Perl in order to run vimpack" | echohl None
+  echohl WarningMsg | echo "Vim requires an embedded Perl in order to run vimpack" | echohl None
 endif
 
 EOF

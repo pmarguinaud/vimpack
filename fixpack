@@ -1,5 +1,105 @@
 #!/usr/bin/perl -w
-#
+
+
+=head1 NAME
+
+fixpack
+
+=head1 SYNOPSIS
+
+Insert in your gmkfile :
+
+  FRTNAME = /home/gmap/mrpm/marguina/bin/fixpack --type xterm --log -- /home/gmap/mrpm/khatib/public/bin/mpiifort_wrapper
+
+Or in your ics_masterodb :
+
+  cat > $GMKWRKDIR/.masterodb_load <<end_of_masterodb_load
+  /home/gmap/mrpm/marguina/bin/fixpack --type xterm  -- mpiifort -v -fp-stack-check -qopenmp -qopenmp-threadprivate compat -shared-intel -lrt -lstdc++
+  end_of_masterodb_load
+
+
+=head1 DESCRIPTION
+
+C<fixpack> is a script for wrapping gmkpack compiler & linker wrapper scripts. 
+It allows the user to debug interactively code at compile time : C<gmkpack> 
+will invoke it when compiling a FORTRAN unit or linking an executable fails.
+
+C<fixpack> will then start a interactive session allowing the user to edit
+the file being compiled and compile it with different options.
+
+Once the user exits the interactive session, the file (if modified) is copied
+back to the user local pack. C<fixpack> will attempt to compile the file
+again.
+
+=head2 SESSIONS
+
+Two kinds of interactive sessions are available (option C<--type>):
+
+=over 4
+
+=item xterm
+
+C<fixpack> will create an xterm running a shell in the directory used by 
+C<gmkpack>; this xterm will pop up in the user desktop.
+
+=item screen
+
+C<fixpack> will create a screen session, that the user can attach to, using
+C<screen -x>.
+
+=back
+
+=head2 ALIASES
+
+C<fixpack> provides two aliases :
+
+=over 4
+
+=item e
+
+Edit the file.
+
+=item r
+
+Compile again.
+
+=back
+
+=head1 OPTIONS
+
+=over 4
+
+=item C<--type> 
+
+screen or xterm
+
+=item C<--warn>
+
+If set, will print a message in the user terminal where gmkpack is executing,
+stating that the file being compiled is ready for interactive debug.
+
+=item C<--log>
+
+If set, C<fixpack> will log information in C</tmp/fixpack.$USER.log>.
+
+=back
+
+=head1 EXITING FIXPACK
+
+On exit, C<fixpack> will attempt to run the original command. Unless a
+script named C<compile.sh> exists; in this case, C<fixpack> will run 
+this script instead of the original command.
+
+=head1 SEE ALSO
+
+C<gmkpack>
+
+=head1 AUTHOR
+
+pmarguinaud@hotmail.com
+
+=cut
+
 
 package Linux;
 
@@ -239,7 +339,22 @@ if ($file)
   }
 
 # Compile once more, to check everythning is OK
-exec (@cmd);
+
+my $compile = 'compile.sh';
+
+if (-f $compile)
+  {
+    chmod (0755, $compile);
+    if (system ("./$compile"))
+      {
+        die;
+      }
+    unlink ($compile);
+  }
+else
+  {
+    exec (@cmd);
+  }
 
 
 
