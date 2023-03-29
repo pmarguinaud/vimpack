@@ -9,7 +9,7 @@ for f in vimpack gitpack tarpack lstpack fixpack
 do
   cat ->> README.md << EOF
 
-# $f
+# $f
 
 EOF
   

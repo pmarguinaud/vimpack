@@ -1,7 +1,7 @@
 ![](./Images/gmkpack.jpg)
 
 
-# vimpack
+# vimpack
 
 ## NAME
 
@@ -20,7 +20,7 @@ Help is available in vim: type `:help vimpack` from within vimpack.
 
 Philippe.Marguinaud@meteo.fr
 
-# gitpack
+# gitpack
 
 ## NAME
 
@@ -97,13 +97,13 @@ All files matching one of these regex will not be managed by `gitpack`.
 
 pmarguinaud@hotmail.com
 
-# tarpack
+# tarpack
 
 
-# lstpack
+# lstpack
 
 
-# fixpack
+# fixpack
 
 ## NAME
 
