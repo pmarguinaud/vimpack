@@ -30,6 +30,7 @@ vimpack documentation (in vimdoc format):
       -w    Insert warnings & message from the compiler in the code
       -h    Help
       -x    Dump documentation 
+
     *vimpack.txt*
     
                          Gmkpack-ready Vim editor 

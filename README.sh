@@ -23,6 +23,7 @@ vimpack documentation (in vimdoc format):
 
 EOF
     ./vimpack -h | perl -pe 's/^/    /o;' >> README.md
+    echo                                  >> README.md
     ./vimpack -x | perl -pe 's/^/    /o;' >> README.md
   fi
 
