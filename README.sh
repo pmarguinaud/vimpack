@@ -19,7 +19,7 @@ EOF
   then
     cat >> README.md << EOF
 
-C<vimpack> documentation (in vimdoc format):
+vimpack documentation (in vimdoc format):
 
 EOF
     ./vimpack -h | perl -pe 's/^/    /o;' >> README.md

@@ -20,7 +20,7 @@ Help is available in vim: type `:help vimpack` from within vimpack.
 
 Philippe.Marguinaud@meteo.fr
 
-C<vimpack> documentation (in vimdoc format):
+vimpack documentation (in vimdoc format):
 
     vimpack 
       -d    Open vimdiff (difference with base pack and current pack)
