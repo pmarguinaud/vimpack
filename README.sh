@@ -17,6 +17,11 @@ EOF
 
   if [ "x$f" = "xvimpack" ]
   then
+    cat >> README.md << EOF
+
+C<vimpack> documentation (in vimdoc format):
+
+EOF
     ./vimpack -h | perl -pe 's/^/    /o;' >> README.md
     ./vimpack -x | perl -pe 's/^/    /o;' >> README.md
   fi

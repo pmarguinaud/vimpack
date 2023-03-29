@@ -19,6 +19,9 @@ Help is available in vim: type `:help vimpack` from within vimpack.
 ## AUTHOR
 
 Philippe.Marguinaud@meteo.fr
+
+C<vimpack> documentation (in vimdoc format):
+
     vimpack 
       -d    Open vimdiff (difference with base pack and current pack)
       -i    Create index and exits
