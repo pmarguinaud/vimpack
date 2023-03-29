@@ -137,9 +137,8 @@ sub init
     {
       my $p = &scanPack (@view[1..$#view]);
 
-      &mkpath ("$GITPACK/git");
-      &run ("cp -alf $git/* ./$GITPACK/git/");
-      &run ("cp -r $git/.git ./$GITPACK/git/.git");
+      &mkpath ("$GITPACK/");
+      &run ("cp -r $git/ ./$GITPACK/git");
       &run (@GIT, checkout => $opts{branch}) if ($opts{branch});
       
       my $g = &scanPack ("$PACK/$GITPACK/git");
@@ -175,10 +174,9 @@ sub init
 
       die unless (-d "$pack/$GITPACK/git");
 
-      &mkpath ("$GITPACK/git");
+      &mkpath ("$GITPACK/");
 
-      &run ("cp -alf $pack/$GITPACK/git/* ./$GITPACK/git/");
-      &run ("cp -r $pack/$GITPACK/git/.git ./$GITPACK/git/.git");
+      &run ("cp -alf $pack/$GITPACK/git/ ./$GITPACK/git");
     }
   else
     {
@@ -392,7 +390,6 @@ sub ok
   my $f = shift;
   return unless (-f $f);
 
-
   unless ($ko)
     {
       $ko = [];
@@ -403,21 +400,25 @@ sub ok
           $conf = do ($conf);
           push @$ko, @{ $conf->{ignore} || [] };
         }
-
     }
 
 
+  my $ret = 0;
 
   for my $m (@$ko)
     {
-      return if ($f =~ $m);
+      goto RETURN if ($f =~ $m);
     }
 
-  return if ($f =~ m/\.(?:lst|optrpt|o|mod|smod|ok|swp)$/o);
-  return if ($f =~ m,odb/ddl\.\w+/\w+.(?:c|h|ddl_),o);
-  return if ($f =~ m/\.(?:F90|F)\.xml$/o);
+  goto RETURN if ($f =~ m/\.(?:lst|optrpt|o|mod|smod|ok|swp)$/o);
+  goto RETURN if ($f =~ m,odb/ddl\.\w+/\w+.(?:c|h|ddl_),o);
+  goto RETURN if ($f =~ m/\.(?:F90|F)\.xml$/o);
 
-  return 1;
+  $ret = 1;
+
+RETURN:
+
+  return $ret;
 }
 
 sub doLink
