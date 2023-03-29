@@ -1,7 +1,7 @@
 #!/bin/bash
 
 cat -> README.md << EOF
-![](./Images/gmkpack.jpg)
+![](./Images/45709664.png)
 
 EOF
 

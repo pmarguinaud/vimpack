@@ -1,24 +1,22 @@
-![](./Images/gmkpack.jpg)
+![](./Images/45709664.png)
 
 
 # vimpack
 
-## NAME
+[1mNAME[0m
+    vimpack
 
-vimpack
+[1mDESCRIPTION[0m
+    A pack editor based on vim; a vim compiled with the embedded Perl
+    interpreter has to be available in your PATH. Help is available in vim:
+    type ":help vimpack" from within vimpack.
 
-## DESCRIPTION
+[1mSEE ALSO[0m
+    "gmkpack", "vim"
 
-A pack editor based on vim; a vim compiled with the embedded Perl interpreter has to be available in your PATH.
-Help is available in vim: type `:help vimpack` from within vimpack.
+[1mAUTHOR[0m
+    Philippe.Marguinaud@meteo.fr
 
-## SEE ALSO
-
-`gmkpack`, `vim`
-
-## AUTHOR
-
-Philippe.Marguinaud@meteo.fr
 
 vimpack documentation (in vimdoc format):
 
@@ -183,80 +181,75 @@ vimpack documentation (in vimdoc format):
 
 # gitpack
 
-## NAME
+[1mNAME[0m
+    gitpack
 
-gitpack
+[1mSYNOPSIS[0m
+      $ cd pack
+      $ cd 48t3_sidyn-spcm.05.IMPIIFC2018.x
+      $ gitpack branch 
+      cy48t3_cpg_drv+
+      cy48t3_cpg_drv+pgi2211+openacc
+      cy48t3_cpg_drv+pgi2211+openacc-link
+      cy48t3_cpg_drv-
+      master
+      merge_CY48T3_and_48R1
+      merge_CY48T3_and_48R1-pm1
+      $ gitpack checkout ...
+      $ ...
 
-## SYNOPSIS
+[1mDESCRIPTION[0m
+    "gitpack" is a script wrapping "git". All git commands are available from
+    within a pack.
 
-    $ cd pack
-    $ cd 48t3_sidyn-spcm.05.IMPIIFC2018.x
-    $ gitpack branch 
-    cy48t3_cpg_drv+
-    cy48t3_cpg_drv+pgi2211+openacc
-    cy48t3_cpg_drv+pgi2211+openacc-link
-    cy48t3_cpg_drv-
-    master
-    merge_CY48T3_and_48R1
-    merge_CY48T3_and_48R1-pm1
-    $ gitpack checkout ...
-    $ ...
+    "gitpack" will synchronize files between the git repository and the
+    gmkpack local view : all changes made to the files located in the local
+    view are copied back to the git repository; in return, all git commands
+    such as checkout, merge, etc. will propagate to gmkpack local view.
 
-## DESCRIPTION
+    When synchronizing files to the local view, "gitpack" will take into
+    account existing files in other "gmkpack" views (main, inter.1, inter.2,
+    etc.)
 
-`gitpack` is a script wrapping `git`. All git commands are available from
-within a pack.
+[1mINITIALIZING A PACK[0m
+    In order to use "gitpack", a pack has to be initialized. Two possibilities
+    :
 
-`gitpack` will synchronize files between the git repository and the gmkpack
-local view : all changes made to the files located in the local view are copied
-back to the git repository; in return, all git commands such as checkout, merge, 
-etc. will propagate to gmkpack local view.
+  [1mThe current pack is derived from another pack, which has already beeen initialized with gitpack:[0m
+    In this case, running the following command is sufficient :
 
-When synchronizing files to the local view, `gitpack` will take into account
-existing files in other `gmkpack` views (main, inter.1, inter.2, etc.)
+      $ gitpack --init
 
-## INITIALIZING A PACK
+    The derived pack will inherit the branch of its master pack.
 
-In order to use `gitpack`, a pack has to be initialized. Two possibilities :
+  [1mNo gitpack initialisation has been performed in the current pack hierarchy:[0m
+    It is then necessary to initialize the current pack from an existing git
+    repository; for instance :
 
-### The current pack is derived from another pack, which has already beeen initialized with gitpack:
+      $ gitpack --init --repository $HOME/IAL
 
-In this case, running the following command is sufficient :
+[1mGITPACK CONFIGURATION[0m
+    It is possible to exclude files from "gitpack" management; before
+    initializing the pack, add a .gitpack.conf. This file may contain a list
+    of regular expressions :
 
-    $ gitpack --init
+      {
+        ignore => [
+                    qr,oops_src/,o,
+                    qr,dummies.c,o,
+                    qr,dummy/unused/,o,
+                    ... 
+                  ]
+      }
 
-The derived pack will inherit the branch of its master pack.
+    All files matching one of these regex will not be managed by "gitpack".
 
-### No gitpack initialisation has been performed in the current pack hierarchy:
+[1mSEE ALSO[0m
+    "gmkpack", "git"
 
-It is then necessary to initialize the current pack from an existing git repository; 
-for instance :
+[1mAUTHOR[0m
+    pmarguinaud@hotmail.com
 
-    $ gitpack --init --repository $HOME/IAL
-
-## GITPACK CONFIGURATION
-
-It is possible to exclude files from `gitpack` management; before initializing the pack,
-add a .gitpack.conf. This file may contain a list of regular expressions :
-
-    {
-      ignore => [
-                  qr,oops_src/,o,
-                  qr,dummies.c,o,
-                  qr,dummy/unused/,o,
-                  ... 
-                ]
-    }
-
-All files matching one of these regex will not be managed by `gitpack`.
-
-## SEE ALSO
-
-`gmkpack`, `git`
-
-## AUTHOR
-
-pmarguinaud@hotmail.com
 
 # tarpack
 
@@ -266,86 +259,71 @@ pmarguinaud@hotmail.com
 
 # fixpack
 
-## NAME
+[1mNAME[0m
+    fixpack
 
-fixpack
+[1mSYNOPSIS[0m
+    Insert in your gmkfile :
 
-## SYNOPSIS
+      FRTNAME = /home/gmap/mrpm/marguina/bin/fixpack --type xterm --log -- /home/gmap/mrpm/khatib/public/bin/mpiifort_wrapper
 
-Insert in your gmkfile :
+    Or in your ics_masterodb :
 
-    FRTNAME = /home/gmap/mrpm/marguina/bin/fixpack --type xterm --log -- /home/gmap/mrpm/khatib/public/bin/mpiifort_wrapper
+      cat > $GMKWRKDIR/.masterodb_load <<end_of_masterodb_load
+      /home/gmap/mrpm/marguina/bin/fixpack --type xterm  -- mpiifort -v -fp-stack-check -qopenmp -qopenmp-threadprivate compat -shared-intel -lrt -lstdc++
+      end_of_masterodb_load
 
-Or in your ics\_masterodb :
+[1mDESCRIPTION[0m
+    "fixpack" is a script for wrapping gmkpack compiler & linker wrapper
+    scripts. It allows the user to debug interactively code at compile time :
+    "gmkpack" will invoke it when compiling a FORTRAN unit or linking an
+    executable fails.
 
-    cat > $GMKWRKDIR/.masterodb_load <<end_of_masterodb_load
-    /home/gmap/mrpm/marguina/bin/fixpack --type xterm  -- mpiifort -v -fp-stack-check -qopenmp -qopenmp-threadprivate compat -shared-intel -lrt -lstdc++
-    end_of_masterodb_load
+    "fixpack" will then start a interactive session allowing the user to edit
+    the file being compiled and compile it with different options.
 
-## DESCRIPTION
+    Once the user exits the interactive session, the file (if modified) is
+    copied back to the user local pack. "fixpack" will attempt to compile the
+    file again.
 
-`fixpack` is a script for wrapping gmkpack compiler & linker wrapper scripts. 
-It allows the user to debug interactively code at compile time : `gmkpack` 
-will invoke it when compiling a FORTRAN unit or linking an executable fails.
+  [1mSESSIONS[0m
+    Two kinds of interactive sessions are available (option "--type"):
 
-`fixpack` will then start a interactive session allowing the user to edit
-the file being compiled and compile it with different options.
+    xterm
+        "fixpack" will create an xterm running a shell in the directory used
+        by "gmkpack"; this xterm will pop up in the user desktop.
 
-Once the user exits the interactive session, the file (if modified) is copied
-back to the user local pack. `fixpack` will attempt to compile the file
-again.
+    screen
+        "fixpack" will create a screen session, that the user can attach to,
+        using "screen -x".
 
-### SESSIONS
+  [1mALIASES[0m
+    "fixpack" provides two aliases :
 
-Two kinds of interactive sessions are available (option `--type`):
+    e   Edit the file.
 
-- xterm
+    r   Compile again.
 
-    `fixpack` will create an xterm running a shell in the directory used by 
-    `gmkpack`; this xterm will pop up in the user desktop.
+[1mOPTIONS[0m
+    "--type"
+        screen or xterm
 
-- screen
+    "--warn"
+        If set, will print a message in the user terminal where gmkpack is
+        executing, stating that the file being compiled is ready for
+        interactive debug.
 
-    `fixpack` will create a screen session, that the user can attach to, using
-    `screen -x`.
+    "--log"
+        If set, "fixpack" will log information in "/tmp/fixpack.$USER.log".
 
-### ALIASES
+[1mEXITING FIXPACK[0m
+    On exit, "fixpack" will attempt to run the original command. Unless a
+    script named "compile.sh" exists; in this case, "fixpack" will run this
+    script instead of the original command.
 
-`fixpack` provides two aliases :
+[1mSEE ALSO[0m
+    "gmkpack"
 
-- e
+[1mAUTHOR[0m
+    pmarguinaud@hotmail.com
 
-    Edit the file.
-
-- r
-
-    Compile again.
-
-## OPTIONS
-
-- `--type` 
-
-    screen or xterm
-
-- `--warn`
-
-    If set, will print a message in the user terminal where gmkpack is executing,
-    stating that the file being compiled is ready for interactive debug.
-
-- `--log`
-
-    If set, `fixpack` will log information in `/tmp/fixpack.$USER.log`.
-
-## EXITING FIXPACK
-
-On exit, `fixpack` will attempt to run the original command. Unless a
-script named `compile.sh` exists; in this case, `fixpack` will run 
-this script instead of the original command.
-
-## SEE ALSO
-
-`gmkpack`
-
-## AUTHOR
-
-pmarguinaud@hotmail.com
