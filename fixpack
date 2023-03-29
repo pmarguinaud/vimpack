@@ -276,6 +276,9 @@ if ($file)
     unlink ($temp);
     
     &xcopy ($orig, $temp);
+
+    &mkpath ('.orig');
+    &xcopy ($orig, ".orig/$temp"); # Keep original file for comparison
   }
 
 # Create scripts
