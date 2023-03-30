@@ -1,5 +1,9 @@
 #!/bin/bash
 
+set -e
+
+perl -e ' use Pod::Markdown '
+
 cat -> README.md << EOF
 ![](./Images/45709664.png)
 

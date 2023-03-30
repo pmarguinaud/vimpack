@@ -65,9 +65,21 @@ add a .gitpack.conf. This file may contain a list of regular expressions :
 
 All files matching one of these regex will not be managed by `gitpack`.
 
+# DATA
+
+This section describes `gitpack` data.
+
+`gitpack` copies the git repository in `.gitpack/git`. In order to make file comparison fast and
+save disk space, files from the repository are hard linked to the pack local view.
+It is therefore important to edit these files using `vimpack` (which is aware of this, and creates 
+single linked file before saving changes), or make sure that files to be edited are single linked.
+
+`gitpack` also maintains a copy of the set of files that was available in the local view the last
+time it was invoked. This set of files is located in `.gitpack/tmp`.
+
 # SEE ALSO
 
-`gmkpack`, `git`
+`gmkpack`, `git`, `vimpack`
 
 # AUTHOR
 
