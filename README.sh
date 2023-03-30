@@ -7,13 +7,15 @@ EOF
 
 for f in vimpack gitpack tarpack lstpack fixpack gdbpack ddtpack dotpack
 do
+
+  md=doc/$f.md  
+
   cat ->> README.md << EOF
 
-# [$f ...](./$f.md)
+# [$f ...](./$md)
 
 EOF
 
-  md=doc/$f.md  
 
   perldoc -o Markdown $f > $md
 
