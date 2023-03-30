@@ -278,6 +278,7 @@ command! -nargs=0 H      :perl $::EDITOR->LOGHIST ()
 command! -nargs=1 NF     :perl $::EDITOR->NEWFILE ("<args>")
 map <TAB>                :perl $::EDITOR->FIND (auto => 1, new_window => 0, defn => 0)<CR>
 map œ                    :perl $::EDITOR->FIND (auto => 1, new_window => 0, defn => 1)<CR>
+map `                    :perl $::EDITOR->FIND (auto => 1, new_window => 0, defn => 1)<CR>
 map ²                    :perl $::EDITOR->FIND (auto => 1, new_window => 0, defn => 1)<CR>
 map <S-TAB>              :perl $::EDITOR->FIND (auto => 1, new_window => 1, defn => 0)<CR>
 map <C-²>                :perl $::EDITOR->FIND (auto => 1, new_window => 1, defn => 1)<CR>

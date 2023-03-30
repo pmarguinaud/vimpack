@@ -1,0 +1,78 @@
+#!/usr/bin/perl -w
+#
+use strict;
+use FileHandle;
+use File::Find;
+use Cwd;
+use Data::Dumper;
+use File::Path;
+use Data::Dumper;
+use Getopt::Long;
+use FindBin qw ($Bin);
+use lib "$Bin/lib";
+use debug;
+
+my %opts = (link => 0, 'patch-bin' => 0, verbose => 0, run => 0, session => 0);
+&GetOptions (map { ("$_", \$opts{$_}) } keys (%opts));
+
+my $pack = $ENV{TARGET_PACK} || &cwd (); 
+
+if ($opts{'patch-bin'})
+  {
+    &debug::patchbin ($pack);
+  }
+
+if ($opts{'link'})
+  {
+    &debug::link ($pack);
+  }
+
+if ($opts{session})
+  {
+    my $cwd = &cwd ();
+    chdir ($pack);
+
+    my @view = do { (my $fh = 'FileHandle'->new ("<.gmkview")) or die ("Current directory is not a pack\n"); my @x = <$fh>; chomp for (@x); reverse (@x) };
+    
+    my @dir;
+    
+    &find 
+    (
+      {
+        wanted => sub { return unless (-d); push @dir, "$pack/$File::Find::name"; },
+        no_chdir => 1,
+      },
+      map ({ "src/$_/" } @view)
+    );
+    
+    &mkpath ('.gdb');
+    
+    'FileHandle'->new ('>.gdb/.gdbinit')->print (join ('', map ({ "directory $_\n" } @dir)));
+    'FileHandle'->new ('>>.gdb/.gdbinit')->print (<< 'EOF');
+define runto
+  tbreak \$arg0
+  cont
+end 
+start 
+EOF
+    chdir ($cwd);
+  }
+
+if ($opts{run})
+  {
+    my ($prog, @args) = @ARGV;
+
+    my $gmkpack = &debug::readbin ($prog);
+  
+    die unless ($gmkpack);
+
+    my $pack = $gmkpack->{pack};
+
+    my @gdb = ('gdb', -x => "$pack/.gdb/.gdbinit", '--args', $prog, @args);
+    print "@gdb\n";
+
+    exec ('gdb', -x => "$pack/.gdb/.gdbinit", '--args', $prog, @args);
+  }
+
+
+    

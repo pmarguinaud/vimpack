@@ -5,7 +5,7 @@ cat -> README.md << EOF
 
 EOF
 
-for f in vimpack gitpack tarpack lstpack fixpack
+for f in vimpack gitpack tarpack lstpack fixpack gdbpack ddtpack
 do
   cat ->> README.md << EOF
 
