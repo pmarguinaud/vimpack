@@ -68,9 +68,6 @@ if ($opts{run})
 
     my $pack = $gmkpack->{pack};
 
-    my @gdb = ('gdb', -x => "$pack/.gdb/.gdbinit", '--args', $prog, @args);
-    print "@gdb\n";
-
     exec ('gdb', -x => "$pack/.gdb/.gdbinit", '--args', $prog, @args);
   }
 

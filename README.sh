@@ -5,26 +5,46 @@ cat -> README.md << EOF
 
 EOF
 
-for f in vimpack gitpack tarpack lstpack fixpack gdbpack ddtpack
+for f in vimpack gitpack tarpack lstpack fixpack gdbpack ddtpack dotpack
 do
   cat ->> README.md << EOF
 
-# $f
+# [$f ...](./$f.md)
 
 EOF
-  
-  perldoc -o Markdown $f | perl -pe 's/^#/##/o;' >> README.md
+
+  md=doc/$f.md  
+
+  perldoc -o Markdown $f > $md
 
   if [ "x$f" = "xvimpack" ]
   then
-    cat >> README.md << EOF
+
+    cat >> $md << EOF
+
+vimpack options :
+
+EOF
+    echo                                  >> $md
+    ./vimpack -h | perl -pe 's/^/    /o;' >> $md
+
+    cat >> $md << EOF
 
 vimpack documentation (in vimdoc format):
 
 EOF
-    ./vimpack -h | perl -pe 's/^/    /o;' >> README.md
-    echo                                  >> README.md
-    ./vimpack -x | perl -pe 's/^/    /o;' >> README.md
+    echo                                  >> $md
+    ./vimpack -x | perl -pe 's/^/    /o;' >> $md
+  fi
+
+  if [ "x$f" = "xdotpack" ]
+  then
+    cat >> $md << EOF
+
+![](../Images/CPG_GP_HYD.svg)
+
+EOF
+
   fi
 
 done

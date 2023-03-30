@@ -33,18 +33,199 @@ sub scan
   return $scan{$dir};
 }
 
+sub session
+{
+  my $pack = shift;
+
+  chdir ($pack);
+  
+  my $dir_ddt = "$pack/.ddt";
+  &mkpath ($dir_ddt);
+  
+  my @branch = do { my $fh = 'FileHandle'->new ("<$pack/.gmkview"); <$fh> };
+  chomp for (@branch);
+  
+  &mkpath ("$pack/.ddt/src");
+  
+  my $accept = sub
+                   {
+                     my $p = shift;
+                     return if (-d $p);
+                     my $b = &basename ($p);
+        
+                     (($p =~ m/(?:\.(?:o|lst|list|mod|ok|swp)|~)$/io) || ($b =~ m/^i\..*\.L$/o) || ($b eq 'xref.db')) 
+                       && return;
+                     ($p =~ m/\.(?:include|intfb)/o) && return;
+  
+                     return 1;
+                   };
+  
+  my $directories = do ("$pack/.ddt/directories.pl") || {};
+  
+  # First time : traverse all packs we inherit from, record
+  # file mapping in base.pl, and link to .ddt/src
+  
+  unless (-f "$pack/.ddt/base.pl")
+    {
+      my $base = {};
+      for my $branch (@branch[1..$#branch])
+        {
+          chdir ("$pack/src/$branch");
+          &find (
+                  {
+                    wanted => sub 
+                                  {
+                                    my $P = 'File::Spec'->canonpath ($File::Find::name);
+                                    return if (exists $base->{$P});
+                                    return unless ($accept->($P));
+                                    my $p = "$pack/src/$branch/$P";
+                                    $base->{$P} = $p;
+                                    my $q = "$pack/.ddt/src/$P";
+                                    &mkpath (&dirname ($q));
+                                    symlink ($p, $q);
+                                    $directories->{&dirname ($P)}++;
+                                  },
+                    no_chdir => 1,
+                  }, '.'
+                );
+          chdir ($pack);
+        }
+      'FileHandle'->new (">$pack/.ddt/base.pl")->print (&Dumper ($base));
+    }
+  
+  
+  # Traverse src/local and link src/local files to .ddt/src
+  
+  my $local_new = {};
+  
+  chdir ("$pack/src/local");
+  &find (
+          {
+            wanted => sub 
+                          {
+                            my $P = 'File::Spec'->canonpath ($File::Find::name);
+                            return if (exists $local_new->{$P});
+                            return unless ($accept->($P));
+                            $local_new->{$P} = "$pack/src/local/$P";
+                            $directories->{&dirname ($P)}++;
+                          },
+            no_chdir => 1,
+          }, '.'
+        );
+  chdir ($pack);
+  
+  'FileHandle'->new (">$pack/.ddt/directories.pl")->print (&Dumper ($directories));
+  
+  my $local_old = do ("$pack/.ddt/local.pl") || {};
+  
+  'FileHandle'->new (">$pack/.ddt/local.pl")->print (&Dumper ($local_new));
+  
+  # Add files from local pack
+  
+  while (my ($P, $p) = each (%$local_new))
+    {
+      my $q = "$pack/.ddt/src/$P";
+      my $stp = stat ($p);
+      my $stq = stat ($q);
+      &mkpath (&dirname ($q));
+  # New source file
+      unless ($stq)
+        {
+          link ($p, $q);
+          next;
+        }
+  # This file existed in inherited packs; remove it, and point to local pack
+      unless ($stp->ino () == $stq->ino ())
+        {
+          unlink ($q);
+          link ($p, $q);
+        }
+    }
+  
+  # Check files from inherited packs
+  
+  my $base = do ("$pack/.ddt/base.pl");
+  
+  while (my ($P, $p) = each (%$local_old))
+    {
+      next if ($local_new->{$P});
+  # A file was removed from local pack; restore it from inherited packs
+      my $q = "$pack/.ddt/src/$P";
+      unlink ($q);
+      symlink ($base->{$P}, $q);
+    }
+  
+  
+  # 
+  
+  my $session = "$dir_ddt/session.ddt";
+  
+  # if session already exist, try to keep breakpoints
+  
+  my @breakpoints;
+  
+  if (-f $session)
+    {
+      my @xml = do { my $fh = 'FileHandle'->new ("<$session"); <$fh> };
+      for (@xml)
+        {
+          if (m/<breakpoint.*fullpath="([^"]+)"/o)
+            {
+              push @breakpoints, $_;
+            }
+        }
+      rename ("$dir_ddt/$session", "$dir_ddt/$session.old");
+    }
+  
+  
+  my $fh_xml = 'FileHandle'->new (">$session");
+  
+  $fh_xml->print (<< 'EOF');
+<?xml version="1.0"?>
+<session>
+    <breakpoints>
+EOF
+  
+  for (@breakpoints)
+    {
+      $fh_xml->print ($_);
+    }
+  
+  $fh_xml->print (<< 'EOF');
+    </breakpoints>
+    <sources>
+EOF
+  
+  my @dir = keys (%$directories);
+  
+  for my $dir_src (@dir)
+    {
+      $fh_xml->print ("      <directory>$pack/.ddt/src/$dir_src/</directory>\n");
+    }
+  
+  $fh_xml->print (<< 'EOF');
+    </sources>
+</session>
+EOF
+  
+  $fh_xml->close ();
+
+}
+
 if ($opts{run})
   {
-    exit (0);
+    my ($prog, @args) = @ARGV;
+
+    my $gmkpack = &debug::readbin ($prog);
+  
+    die unless ($gmkpack);
+
+    my $pack = $gmkpack->{pack};
+
+    exec ('ddt', -ddtsession => "$pack/.ddt/session.ddt", $prog, @args);
   }
 
-
 my $pack = $ENV{TARGET_PACK} || &cwd ();
-
-chdir ($pack);
-
-my $dir_ddt = "$pack/.ddt";
-&mkpath ($dir_ddt);
 
 if ($opts{'patch-bin'})
   {
@@ -56,173 +237,9 @@ if ($opts{'link'})
     &debug::link ($pack);
   }
 
-exit (0) unless ($opts{session});
-
-my @branch = do { my $fh = 'FileHandle'->new ("<$pack/.gmkview"); <$fh> };
-chomp for (@branch);
-
-&mkpath ("$pack/.ddt/src");
-
-my $accept = sub
-                 {
-                   my $p = shift;
-                   return if (-d $p);
-                   my $b = &basename ($p);
-      
-                   (($p =~ m/(?:\.(?:o|lst|list|mod|ok|swp)|~)$/io) || ($b =~ m/^i\..*\.L$/o) || ($b eq 'xref.db')) 
-                     && return;
-                   ($p =~ m/\.(?:include|intfb)/o) && return;
-
-                   return 1;
-                 };
-
-my $directories = do ("$pack/.ddt/directories.pl") || {};
-
-# First time : traverse all packs we inherit from, record
-# file mapping in base.pl, and link to .ddt/src
-
-unless (-f "$pack/.ddt/base.pl")
+if ($opts{session})
   {
-    my $base = {};
-    for my $branch (@branch[1..$#branch])
-      {
-        chdir ("$pack/src/$branch");
-        &find (
-                {
-                  wanted => sub 
-                                {
-                                  my $P = 'File::Spec'->canonpath ($File::Find::name);
-                                  return if (exists $base->{$P});
-                                  return unless ($accept->($P));
-                                  my $p = "$pack/src/$branch/$P";
-                                  $base->{$P} = $p;
-                                  my $q = "$pack/.ddt/src/$P";
-                                  &mkpath (&dirname ($q));
-                                  symlink ($p, $q);
-                                  $directories->{&dirname ($P)}++;
-                                },
-                  no_chdir => 1,
-                }, '.'
-              );
-        chdir ($pack);
-      }
-    'FileHandle'->new (">$pack/.ddt/base.pl")->print (&Dumper ($base));
+    &session ($pack);
   }
 
-
-# Traverse src/local and link src/local files to .ddt/src
-
-my $local_new = {};
-
-chdir ("$pack/src/local");
-&find (
-        {
-          wanted => sub 
-                        {
-                          my $P = 'File::Spec'->canonpath ($File::Find::name);
-                          return if (exists $local_new->{$P});
-                          return unless ($accept->($P));
-                          $local_new->{$P} = "$pack/src/local/$P";
-                          $directories->{&dirname ($P)}++;
-                        },
-          no_chdir => 1,
-        }, '.'
-      );
-chdir ($pack);
-
-'FileHandle'->new (">$pack/.ddt/directories.pl")->print (&Dumper ($directories));
-
-my $local_old = do ("$pack/.ddt/local.pl") || {};
-
-'FileHandle'->new (">$pack/.ddt/local.pl")->print (&Dumper ($local_new));
-
-# Add files from local pack
-
-while (my ($P, $p) = each (%$local_new))
-  {
-    my $q = "$pack/.ddt/src/$P";
-    my $stp = stat ($p);
-    my $stq = stat ($q);
-    &mkpath (&dirname ($q));
-# New source file
-    unless ($stq)
-      {
-        link ($p, $q);
-        next;
-      }
-# This file existed in inherited packs; remove it, and point to local pack
-    unless ($stp->ino () == $stq->ino ())
-      {
-        unlink ($q);
-        link ($p, $q);
-      }
-  }
-
-# Check files from inherited packs
-
-my $base = do ("$pack/.ddt/base.pl");
-
-while (my ($P, $p) = each (%$local_old))
-  {
-    next if ($local_new->{$P});
-# A file was removed from local pack; restore it from inherited packs
-    my $q = "$pack/.ddt/src/$P";
-    unlink ($q);
-    symlink ($base->{$P}, $q);
-  }
-
-
-# 
-
-my $session = "$dir_ddt/session.ddt";
-
-# if session already exist, try to keep breakpoints
-
-my @breakpoints;
-
-if (-f $session)
-  {
-    my @xml = do { my $fh = 'FileHandle'->new ("<$session"); <$fh> };
-    for (@xml)
-      {
-        if (m/<breakpoint.*fullpath="([^"]+)"/o)
-          {
-            push @breakpoints, $_;
-          }
-      }
-    rename ("$dir_ddt/$session", "$dir_ddt/$session.old");
-  }
-
-
-my $fh_xml = 'FileHandle'->new (">$session");
-
-$fh_xml->print (<< 'EOF');
-<?xml version="1.0"?>
-<session>
-    <breakpoints>
-EOF
-
-for (@breakpoints)
-  {
-    $fh_xml->print ($_);
-  }
-
-$fh_xml->print (<< 'EOF');
-    </breakpoints>
-    <sources>
-EOF
-
-my @dir = keys (%$directories);
-
-for my $dir_src (@dir)
-  {
-    $fh_xml->print ("      <directory>$pack/.ddt/src/$dir_src/</directory>\n");
-  }
-
-$fh_xml->print (<< 'EOF');
-    </sources>
-</session>
-EOF
-
-$fh_xml->close ();
-
+  
