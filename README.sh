@@ -24,6 +24,8 @@ EOF
 
     cat >> $md << EOF
 
+# [Short presentation of vimpack](../doc/vimpack.pdf)
+
 vimpack options :
 
 EOF
