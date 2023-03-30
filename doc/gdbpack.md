@@ -1,11 +1,15 @@
-[1mNAME[0m
-    "gdbpack"
+# NAME
 
-[1mSYNOPSIS[0m
-[1mDESCRIPTION[0m
-[1mSEE ALSO[0m
-    "gmkpack", "gdb"
+`gdbpack`
 
-[1mAUTHOR[0m
-    pmarguinaud@hotmail.com
+# SYNOPSIS
 
+# DESCRIPTION
+
+# SEE ALSO
+
+`gmkpack`, `gdb`
+
+# AUTHOR
+
+pmarguinaud@hotmail.com
