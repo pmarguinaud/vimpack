@@ -24,7 +24,7 @@ EOF
 
     cat >> $md << EOF
 
-# [Short presentation of vimpack](../doc/vimpack.pdf)
+[Short presentation of vimpack](vimpack.pdf)
 
 vimpack options :
 
@@ -34,11 +34,12 @@ EOF
 
     cat >> $md << EOF
 
-vimpack documentation (in vimdoc format):
+[vimpack documentation (in vimdoc format)](vimpack.txt)
 
 EOF
-    echo                                  >> $md
-    ./vimpack -x | perl -pe 's/^/    /o;' >> $md
+
+    ./vimpack -x > doc/vimpack.txt
+
   fi
 
   if [ "x$f" = "xdotpack" ]
