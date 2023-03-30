@@ -1,83 +1,68 @@
-# NAME
+[1mNAME[0m
+    fixpack
 
-fixpack
+[1mSYNOPSIS[0m
+    Insert in your gmkfile :
 
-# SYNOPSIS
+      FRTNAME = /home/gmap/mrpm/marguina/bin/fixpack --type xterm --log -- /home/gmap/mrpm/khatib/public/bin/mpiifort_wrapper
 
-Insert in your gmkfile :
+    Or in your ics_masterodb :
 
-    FRTNAME = /home/gmap/mrpm/marguina/bin/fixpack --type xterm --log -- /home/gmap/mrpm/khatib/public/bin/mpiifort_wrapper
+      cat > $GMKWRKDIR/.masterodb_load <<end_of_masterodb_load
+      /home/gmap/mrpm/marguina/bin/fixpack --type xterm  -- mpiifort -v -fp-stack-check -qopenmp -qopenmp-threadprivate compat -shared-intel -lrt -lstdc++
+      end_of_masterodb_load
 
-Or in your ics\_masterodb :
+[1mDESCRIPTION[0m
+    "fixpack" is a script for wrapping gmkpack compiler & linker wrapper
+    scripts. It allows the user to debug interactively code at compile time :
+    "gmkpack" will invoke it when compiling a FORTRAN unit or linking an
+    executable fails.
 
-    cat > $GMKWRKDIR/.masterodb_load <<end_of_masterodb_load
-    /home/gmap/mrpm/marguina/bin/fixpack --type xterm  -- mpiifort -v -fp-stack-check -qopenmp -qopenmp-threadprivate compat -shared-intel -lrt -lstdc++
-    end_of_masterodb_load
+    "fixpack" will then start a interactive session allowing the user to edit
+    the file being compiled and compile it with different options.
 
-# DESCRIPTION
+    Once the user exits the interactive session, the file (if modified) is
+    copied back to the user local pack. "fixpack" will attempt to compile the
+    file again.
 
-`fixpack` is a script for wrapping gmkpack compiler & linker wrapper scripts. 
-It allows the user to debug interactively code at compile time : `gmkpack` 
-will invoke it when compiling a FORTRAN unit or linking an executable fails.
+  [1mSESSIONS[0m
+    Two kinds of interactive sessions are available (option "--type"):
 
-`fixpack` will then start a interactive session allowing the user to edit
-the file being compiled and compile it with different options.
+    xterm
+        "fixpack" will create an xterm running a shell in the directory used
+        by "gmkpack"; this xterm will pop up in the user desktop.
 
-Once the user exits the interactive session, the file (if modified) is copied
-back to the user local pack. `fixpack` will attempt to compile the file
-again.
+    screen
+        "fixpack" will create a screen session, that the user can attach to,
+        using "screen -x".
 
-## SESSIONS
+  [1mALIASES[0m
+    "fixpack" provides two aliases :
 
-Two kinds of interactive sessions are available (option `--type`):
+    e   Edit the file.
 
-- xterm
+    r   Compile again.
 
-    `fixpack` will create an xterm running a shell in the directory used by 
-    `gmkpack`; this xterm will pop up in the user desktop.
+[1mOPTIONS[0m
+    "--type"
+        screen or xterm
 
-- screen
+    "--warn"
+        If set, will print a message in the user terminal where gmkpack is
+        executing, stating that the file being compiled is ready for
+        interactive debug.
 
-    `fixpack` will create a screen session, that the user can attach to, using
-    `screen -x`.
+    "--log"
+        If set, "fixpack" will log information in "/tmp/fixpack.$USER.log".
 
-## ALIASES
+[1mEXITING FIXPACK[0m
+    On exit, "fixpack" will attempt to run the original command. Unless a
+    script named "compile.sh" exists; in this case, "fixpack" will run this
+    script instead of the original command.
 
-`fixpack` provides two aliases :
+[1mSEE ALSO[0m
+    "gmkpack"
 
-- e
+[1mAUTHOR[0m
+    pmarguinaud@hotmail.com
 
-    Edit the file.
-
-- r
-
-    Compile again.
-
-# OPTIONS
-
-- `--type` 
-
-    screen or xterm
-
-- `--warn`
-
-    If set, will print a message in the user terminal where gmkpack is executing,
-    stating that the file being compiled is ready for interactive debug.
-
-- `--log`
-
-    If set, `fixpack` will log information in `/tmp/fixpack.$USER.log`.
-
-# EXITING FIXPACK
-
-On exit, `fixpack` will attempt to run the original command. Unless a
-script named `compile.sh` exists; in this case, `fixpack` will run 
-this script instead of the original command.
-
-# SEE ALSO
-
-`gmkpack`
-
-# AUTHOR
-
-pmarguinaud@hotmail.com

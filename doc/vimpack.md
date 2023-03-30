@@ -1,19 +1,19 @@
-# NAME
+[1mNAME[0m
+    vimpack
 
-vimpack
+[1mDESCRIPTION[0m
+    A pack editor based on vim; a vim compiled with the embedded Perl
+    interpreter has to be available in your PATH. Help is available in vim:
+    type ":help vimpack" from within vimpack.
 
-# DESCRIPTION
+[1mSEE ALSO[0m
+    "gmkpack", "vim"
 
-A pack editor based on vim; a vim compiled with the embedded Perl interpreter has to be available in your PATH.
-Help is available in vim: type `:help vimpack` from within vimpack.
+[1mAUTHOR[0m
+    Philippe.Marguinaud@meteo.fr
 
-# SEE ALSO
 
-`gmkpack`, `vim`
-
-# AUTHOR
-
-Philippe.Marguinaud@meteo.fr
+# [Short presentation of vimpack](../doc/vimpack.pdf)
 
 vimpack options :
 

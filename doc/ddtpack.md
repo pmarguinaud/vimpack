@@ -1,15 +1,11 @@
-# NAME
+[1mNAME[0m
+    "ddtpack"
 
-`ddtpack`
+[1mSYNOPSIS[0m
+[1mDESCRIPTION[0m
+[1mSEE ALSO[0m
+    "gmkpack", "ddt"
 
-# SYNOPSIS
+[1mAUTHOR[0m
+    pmarguinaud@hotmail.com
 
-# DESCRIPTION
-
-# SEE ALSO
-
-`gmkpack`, `ddt`
-
-# AUTHOR
-
-pmarguinaud@hotmail.com
