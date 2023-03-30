@@ -1,5 +1,23 @@
 #!/usr/bin/perl -w
-#
+
+=head1 NAME
+
+C<gdbpack>
+
+=head1 SYNOPSIS
+
+=head1 DESCRIPTION
+
+=head1 SEE ALSO
+
+C<gmkpack>, C<gdb>
+
+=head1 AUTHOR
+
+pmarguinaud@hotmail.com
+
+=cut
+
 use strict;
 use FileHandle;
 use File::Find;
