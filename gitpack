@@ -263,7 +263,7 @@ sub git
 }
 
 my @r = qw (branch push status log show commit fetch diff tag remote difftool);
-my @w = qw (checkout pull merge reset mergetool);
+my @w = qw (checkout pull merge reset mergetool cherry-pick);
 my @chdir = qw (mergetool);
 
 sub bash
@@ -392,6 +392,7 @@ sub scanPack
         }
     }
 
+
   return $p;
 }
 
@@ -400,7 +401,10 @@ my $ko;
 sub ok
 {
   my $f = shift;
-  return unless (-f $f);
+
+  my $ret = 0;
+
+  goto RETURN unless (-f $f);
 
   unless ($ko)
     {
@@ -415,7 +419,6 @@ sub ok
     }
 
 
-  my $ret = 0;
 
   for my $m (@$ko)
     {
@@ -423,7 +426,7 @@ sub ok
     }
 
   goto RETURN if ($f =~ m/\.(?:lst|optrpt|o|mod|smod|ok|swp)$/o);
-  goto RETURN if ($f =~ m,odb/ddl\.\w+/\w+.(?:c|h|ddl_),o);
+  goto RETURN if ($f =~ m,odb/ddl\.\w+/\w+\.(?:c|h|ddl_)$,o);
   goto RETURN if ($f =~ m/\.(?:F90|F)\.xml$/o);
 
   $ret = 1;
@@ -482,6 +485,9 @@ sub testEqualFiles
 
   # Different size 
   return 0 if ($stf->size != $stg->size);
+
+  # Different modes
+  return 0 if ($stf->mode != $stg->mode);
 
   # Slow: compare file contents
   return 1 if (&slurp ($f) eq &slurp ($g));

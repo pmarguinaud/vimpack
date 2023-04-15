@@ -36,7 +36,7 @@ sub patchbin
       
               $fh->print ("__PERL__\n\n\n" . &Dumper ($gmkpack) . "\n\n\n");
               $fh->close ();
-      
+              chmod (0755, $bin);
               system ('objcopy', '--add-section' => ".gmkpack=$f", $bin);
             }
   
