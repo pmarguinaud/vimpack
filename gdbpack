@@ -82,7 +82,7 @@ if ($opts{run})
 
     my $gmkpack = &debug::readbin ($prog);
   
-    die unless ($gmkpack);
+    die $prog unless ($gmkpack);
 
     my $pack = $gmkpack->{pack};
 

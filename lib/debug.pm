@@ -96,7 +96,7 @@ sub readbin
   
   my $section = '.gmkpack';
  
-  my $f = $section . '.' . &basename ($bin);
+  my $f = "/tmp/.$$" . $section . '.' . &basename ($bin);
 
   my $c = ! system ("readelf -p $section $bin > $f");
 
