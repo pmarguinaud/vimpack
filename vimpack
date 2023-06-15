@@ -174,7 +174,6 @@ EOF
 
 use strict;
 use FindBin qw ($Bin);
-use lib "$Bin/perl5";
 
 use File::Basename;
 use File::Spec;

@@ -101,26 +101,29 @@ use Storable;
 use Cwd;
 use Getopt::Long;
 
+use FindBin qw ($Bin);
+
+our $BIN;
+
+use lib do  
+{ 
+  ($BIN, my $exe) = ($Bin, $0);
+  for (1 .. 100)
+    {   
+      last unless (-l $exe);
+      $exe = 'File::Spec'->rel2abs (readlink ($exe), $BIN);
+      $BIN = &dirname ($exe);
+    }   
+  ("$BIN/lib", "$BIN/perl5")
+};
+
+
+use bt;
+
 my @GIT = ('/bin/git');
 my $GITPACK = '.gitpack';
 my $PACK = &cwd ();
 my $HOME = (getpwuid ($>))[7];
-
-sub bt
-{ 
-  print @_;
-
-  print "\n";
-  for (my $i = 0; ; $i++)
-    {
-      last unless (my @call = caller ($i));
-      print " $i ", $call[1], ':', $call[2], "\n";
-    }
-  die "\n";
-}
-
-local $SIG{__WARN__} = \&bt;
-local $SIG{__DIE__} = \&bt;
 
 sub run
 {

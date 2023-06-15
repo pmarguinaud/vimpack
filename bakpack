@@ -1,0 +1,215 @@
+#!/usr/bin/perl -w
+#
+
+package ftp;
+
+use strict;
+use Net::FTP;
+use Data::Dumper;
+use File::Basename;
+
+sub put
+{
+  shift;
+  my ($local, $uri) = @_;
+  my $host = $uri->host ();
+  (my $path = $uri->path ()) =~ s,^/,,o;
+
+  my $ftp = 'Net::FTP'->new ($host, Debug => 1);
+  $ftp->login ();
+  $ftp->mkdir (&dirname ($path), 1);
+  $ftp->put ($local, $path);
+}
+
+sub get
+{
+
+}
+
+package file;
+
+use strict;
+
+sub put
+{
+  shift;
+  my ($local, $uri) = @_;
+}
+
+sub get
+{
+
+}
+
+package main;
+
+use strict;
+use FileHandle;
+use URI;
+use Getopt::Long;
+use Data::Dumper;
+use File::Spec;
+use File::Basename;
+use File::Temp;
+use File::Path;
+use Cwd;
+use FileHandle;
+use FindBin qw ($Bin);
+
+our $BIN;
+
+use lib do 
+{ 
+  ($BIN, my $exe) = ($Bin, $0);
+  for (1 .. 100)
+    {
+      last unless (-l $exe);
+      $exe = 'File::Spec'->rel2abs (readlink ($exe), $BIN);
+      $BIN = &dirname ($exe);
+    }
+  ("$BIN/lib", "$BIN/perl5")
+};
+
+use bt;
+
+
+sub command
+{
+  my @command = @_;
+  system (@command) && die ("`@command' failed");
+}
+
+sub commandPack
+{
+  my $pack = shift;  
+  my $cwd = &cwd ();
+  chdir ($pack);
+  &command (@_);
+  chdir ($cwd);
+}
+
+sub archive
+{
+  shift;
+  my %opts = @_;
+
+  if ((! $opts{pack}) && (-f '.gmkview'))
+    {
+      $opts{pack} = &cwd ();
+    }
+
+  for my $command (qw (clean reset lock))
+    {
+      &commandPack ($opts{pack}, "${command}pack", '-f') if ($opts{$command});
+    }
+
+  $opts{pack} or die;
+
+  my $pack = &basename ($opts{pack});
+  my $dir = &dirname ($opts{pack});
+
+  my $tar = 'File::Spec'->canonpath (join ('/', $opts{scratchdir}, "$pack.tar"));
+  my $uri = 'URI'->new ($opts{remote} . "/$pack.tar");
+  my $scheme = $uri->scheme ();
+
+  (-f $tar) or
+  &command ('tar', -C => $dir, '-cvf', $tar, $pack);
+  $scheme->put ($tar, $uri);
+}
+
+sub getPackDirFromTar
+{
+  my ($tar) = @_;
+
+  my $pack = &basename ($tar, qw (.tar));
+
+  my $tmp = 'File::Temp'->newdir ();
+
+  &command ('tar', -C => $tmp, '-xvf', $tar, "$pack/.genesis");
+  my @genesis = split (m/\s+/o, do { my $fh = 'FileHandle'->new ("<$tmp/$pack/.genesis"); <$fh> });
+  for my $i (0 .. $#genesis)
+    {
+      if ($genesis[$i] eq '-f')
+        {
+          return $genesis[$i+1];
+        }
+    }
+
+}
+
+sub restore
+{
+  my $class = shift;
+  my %opts = @_;
+
+  (my $pack = $opts{pack}) or die;
+  my $dir = $ENV{HOMEPACK} || "$ENV{HOME}/pack";
+
+  my $tar = 'File::Spec'->canonpath (join ('/', $opts{scratchdir}, "$pack.tar"));
+  my $uri = 'URI'->new ($opts{remote} . "/$pack.tar");
+  my $scheme = $uri->scheme ();
+  
+  $scheme->get ($tar, $uri);
+
+  $dir ||= &getPackDirFromTar ($tar);
+
+  (-d $dir) or &mkpath ($dir);
+
+  &command ('tar', -C => $dir, '-xvf', $tar);
+
+  if ($opts{recursive})
+    {
+      my @pack = map { &basename (readlink ($_)) } grep { -l } <$dir/$pack/src/*>;
+      for my $pack (@pack)
+        {
+          $class->restore (%opts, pack => $pack, recursive => 0);
+        }
+    }
+}
+
+my $host = do
+{
+  use Sys::Hostname;
+  my $host = &hostname ();
+  for ($host)
+    {
+      s/login\d+\..*meteo\.fr$//o;
+      s/ndl\d+\..*meteo\.fr$//o;
+      s/transfert\d+\..*meteo\.fr$//o;
+    }
+  $host;
+};
+
+my %opts = 
+(
+  remote     => 'ftp://hendrix.meteo.fr/backup/' . $host . '/pack', 
+  scratchdir => "$ENV{workdir}/tmp", 
+  pack       => -f '.gmkview' ? &pwd () : undef,
+);
+
+my @opts_s = qw (pack remote scratchdir);
+my @opts_f = qw (recursive clean reset lock);
+
+my $method = shift;
+
+&GetOptions 
+(
+  (map { ("$_=s", \$opts{$_}) } @opts_s),
+  (map { ($_, \$opts{$_}) } @opts_f),
+);
+
+
+print &Dumper (\%opts);
+
+if (__PACKAGE__->can ($method))
+  {
+    __PACKAGE__->$method (%opts);
+  }
+else
+  {
+    die ("Uknown method `$method'");
+  }
+
+
+
+
