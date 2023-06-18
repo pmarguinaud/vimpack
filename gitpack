@@ -308,6 +308,12 @@ if (@ARGV && ($ARGV[0] =~ m/^-/o))
       (map { ($_, \$opts{$_}) } @opts_f),
       (map { ("$_=s", \$opts{$_}) } @opts_s),
     );
+
+    if ($opts{repository} && (-d "$opts{repository}/.gitpack/git"))
+      {
+        $opts{repository} = "$opts{repository}/.gitpack/git";
+      }
+
     if ($opts{init})
       {
         &init (%opts);
