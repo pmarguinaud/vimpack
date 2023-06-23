@@ -135,7 +135,7 @@ my $gitpack_time = "$GITPACK/time";
 
 sub getView
 {
-  my @view = do { my $fh = 'FileHandle'->new ('<.gmkview'); <$fh> };
+  my @view = do { my $fh = 'FileHandle'->new ("<$PACK/.gmkview"); <$fh> };
   chomp for (@view);
   @view = map { "$PACK/src/$_" } @view;
   return @view;
@@ -405,6 +405,22 @@ sub scanPack
   return $p;
 }
 
+sub getConf
+{
+  my $pack = shift;
+  
+  my @view = &getView ();
+
+  for my $view (@view)
+    {
+      my $pack = &dirname (&dirname ($view));
+      my $conf = "$pack/.gitpack.conf";
+      return $conf if (-f $conf);
+    }
+  
+  return "$pack/.gitpack.conf";
+}
+
 my $ko;
 
 sub ok
@@ -419,7 +435,7 @@ sub ok
     {
       $ko = [];
 
-      for my $conf ("$HOME/.gitpack.conf", "$PACK/.gitpack.conf")
+      for my $conf ("$HOME/.gitpack.conf", &getConf ($PACK))
         {
           next unless (-f $conf);
           $conf = do ($conf);

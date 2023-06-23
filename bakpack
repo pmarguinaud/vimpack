@@ -115,6 +115,11 @@ sub archive
   (-f $tar) or
   &command ('tar', -C => $dir, '-cvf', $tar, $pack);
   $scheme->put ($tar, $uri);
+
+  if ($opts{remove})
+    {
+      &mtree ($opts{pack});
+    }
 }
 
 sub getPackDirFromTar
@@ -184,11 +189,11 @@ my %opts =
 (
   remote     => 'ftp://hendrix.meteo.fr/backup/' . $host . '/pack', 
   scratchdir => "$ENV{workdir}/tmp", 
-  pack       => -f '.gmkview' ? &pwd () : undef,
+  pack       => -f '.gmkview' ? &cwd () : undef,
 );
 
 my @opts_s = qw (pack remote scratchdir);
-my @opts_f = qw (recursive clean reset lock);
+my @opts_f = qw (recursive clean reset lock remove verbose);
 
 my $method = shift;
 
@@ -199,7 +204,10 @@ my $method = shift;
 );
 
 
-print &Dumper (\%opts);
+if ($opts{verbose})
+  {
+    print &Dumper (\%opts);
+  }
 
 if (__PACKAGE__->can ($method))
   {
