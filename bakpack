@@ -12,44 +12,62 @@ use File::Path;
 sub put
 {
   shift;
-  my ($local, $uri) = @_;
+  my ($local, $uri, %opts) = @_;
   my $host = $uri->host ();
   (my $path = $uri->path ()) =~ s,^/,,o;
 
-  my $ftp = 'Net::FTP'->new ($host, Debug => 1);
+  my $ftp = 'Net::FTP'->new ($host, Debug => $opts{verbose});
   $ftp->login ();
   $ftp->binary ();
   $ftp->mkdir (&dirname ($path), 1);
-  $ftp->put ($local, $path);
+  $ftp->put ($local, $path) or die ("$local, $uri");
 }
 
 sub get
 {
   shift;
-  my ($local, $uri) = @_;
+  my ($local, $uri, %opts) = @_;
   my $host = $uri->host ();
   (my $path = $uri->path ()) =~ s,^/,,o;
 
-  my $ftp = 'Net::FTP'->new ($host, Debug => 1);
+  my $ftp = 'Net::FTP'->new ($host, Debug => $opts{verbose});
   $ftp->login ();
   $ftp->binary ();
   &mkpath (&dirname ($local));
-  $ftp->get ($path, $local);
+  $ftp->get ($path, $local) or die ("$local, $uri");
 }
 
 package file;
 
 use strict;
+use File::Path;
+use File::Copy;
+use File::Basename;
 
 sub put
 {
   shift;
   my ($local, $uri) = @_;
+  my $path = $uri->path ();
+
+  &mkpath (&dirname ($path));
+
+  unlink ($path);
+
+  link ($local, $path) or &copy ($local, $path) or die ("$local, $uri");
 }
 
 sub get
 {
+  shift;
+  my ($local, $uri) = @_;
+  my $path = $uri->path ();
 
+  &mkpath (&dirname ($local));
+
+  unlink ($local);
+
+  link ($path, $local) or &copy ($path, $local) or die ("$local, $uri");
 }
 
 package main;
@@ -101,7 +119,7 @@ sub commandPack
 
 sub archive
 {
-  shift;
+  my $class = shift;
   my %opts = @_;
 
   if ((! $opts{pack}) && (-f '.gmkview'))
@@ -123,13 +141,25 @@ sub archive
   my $uri = 'URI'->new ($opts{remote} . "/$pack.tar");
   my $scheme = $uri->scheme ();
 
-  (-f $tar) or
-  &command ('tar', -C => $dir, '-cvf', $tar, $pack);
-  $scheme->put ($tar, $uri);
+# (-f $tar) or
+
+  my $opt = $opts{verbose} ? '-cvf' : '-cf';
+  &command ('tar', -C => $dir, $opt, $tar, $pack);
+  $scheme->put ($tar, $uri, %opts);
+
+  if ($opts{recursive})
+    {
+      my @pack = map { my $p = readlink ($_); $p = &dirname ($p) for (1 .. 2); $p } grep { -l } <$dir/$pack/src/*>;
+      for my $pack (@pack)
+        {
+          $class->archive (%opts, pack => $pack, recursive => 0);
+        }
+    }
 
   if ($opts{remove})
     {
-      &mtree ($opts{pack});
+      chdir ();
+      &rmtree ($opts{pack});
     }
 }
 
@@ -165,17 +195,18 @@ sub restore
   my $uri = 'URI'->new ($opts{remote} . "/$pack.tar");
   my $scheme = $uri->scheme ();
   
-  $scheme->get ($tar, $uri);
+  $scheme->get ($tar, $uri, %opts);
 
   $dir ||= &getPackDirFromTar ($tar);
 
   (-d $dir) or &mkpath ($dir);
 
-  &command ('tar', -C => $dir, '-xvf', $tar);
+  my $opt = $opts{verbose} ? '-xvf' : '-xf';
+  &command ('tar', -C => $dir, $opt, $tar);
 
   if ($opts{recursive})
     {
-      my @pack = map { &basename (readlink ($_)) } grep { -l } <$dir/$pack/src/*>;
+      my @pack = map { my $p = readlink ($_); $p = &dirname ($p) for (1 .. 2); &basename ($p) } grep { -l } <$dir/$pack/src/*>;
       for my $pack (@pack)
         {
           $class->restore (%opts, pack => $pack, recursive => 0);
@@ -214,11 +245,6 @@ my $method = shift;
   (map { ($_, \$opts{$_}) } @opts_f),
 );
 
-
-if ($opts{verbose})
-  {
-    print &Dumper (\%opts);
-  }
 
 if (__PACKAGE__->can ($method))
   {
