@@ -191,7 +191,17 @@ sub init
 
       &mkpath ("$GITPACK/");
 
-      &run ("cp -alf $pack/$GITPACK/git/ ./$GITPACK/git");
+      my $stg = stat ("$pack/$GITPACK/git");
+      my $stG = stat ($GITPACK);
+
+      if ($stg->uid () == $stG->uid ())
+        {
+          &run ("cp -alf $pack/$GITPACK/git/ ./$GITPACK/git");
+        }
+      else
+        {
+          &run ("cp -r $pack/$GITPACK/git/ ./$GITPACK/git");
+        }
     }
   else
     {
