@@ -93,6 +93,7 @@ pmarguinaud@hotmail.com
 use strict;
 use File::Find;
 use File::Path;
+use File::Copy;
 use File::Basename;
 use FileHandle;
 use File::stat;
@@ -141,6 +142,34 @@ sub getView
   return @view;
 }
 
+sub genesis
+{
+  my $fh = 'FileHandle'->new ('<.genesis');
+  chomp (my $line = <$fh>);
+
+  my @token = split (m/\s+/o, $line);
+  shift (@token);
+
+  my %genesis;
+
+  my $opt;
+  for my $token (@token)
+    {
+      if ($token =~ s/^-//o)
+        {
+          $opt = $token;
+          $genesis{$opt} = 1;
+        }
+      else
+       {
+         $genesis{$opt} = $token;
+       }
+    }
+
+
+  return \%genesis;
+}
+
 sub init
 {
   my %opts = @_;
@@ -148,13 +177,21 @@ sub init
 
   my @view = &getView ();
 
+  if ((scalar (@view) == 1) && (! -f '.gitpack.conf'))
+    {
+      my $genesis = &genesis ();
+      my $cycle = $genesis->{r};
+      my $conf = "$Bin/gitpack.$cycle.conf";
+      &copy ($conf, '.gitpack.conf') if (-f $conf);
+    }
+
   if (my $git = $opts{repository})
     {
       my $p = &scanPack (@view[1..$#view]);
 
       &mkpath ("$GITPACK/");
-      &run ("cp -r $git/ ./$GITPACK/git");
-      &run (@GIT, checkout => $opts{branch}) if ($opts{branch});
+
+      &run (@GIT, 'clone', ($opts{branch} ? ('--branch', $opts{branch}) : ()), $git, "./$GITPACK/git");
       
       my $g = &scanPack ("$PACK/$GITPACK/git");
 
