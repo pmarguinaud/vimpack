@@ -177,7 +177,17 @@ sub init
 
   my @view = &getView ();
 
-  if ((scalar (@view) == 1) && (! -f '.gitpack.conf'))
+  for my $view (@view[1..$#view])
+    {
+      my $pack = readlink ($view);
+      $pack = &dirname ($pack) for (1 .. 2);
+      if (-f "$pack/.gitpack.conf")
+        {
+          &copy ("$pack/.gitpack.conf", '.gitpack.conf');
+          last;
+        }
+    }
+  if (! -f '.gitpack.conf')
     {
       my $genesis = &genesis ();
       my $cycle = $genesis->{r};
@@ -489,8 +499,6 @@ sub ok
           push @$ko, @{ $conf->{ignore} || [] };
         }
     }
-
-
 
   for my $m (@$ko)
     {
