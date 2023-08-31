@@ -656,7 +656,7 @@ sub r
   for my $f (@z)
     {
       &doLink ($v1->{$f}, "$PACK/$GITPACK/tmp/$f");
-      &git (cmd => ['rm', '-f', '--quiet', $f], die => 1);
+      &git (cmd => ['rm', '-f', '--quiet', $f], die => 1) if (-f "$PACK/$GITPACK/git/$f");
     }
 }
 
