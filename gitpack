@@ -506,7 +506,7 @@ sub ok
     }
 
   goto RETURN if ($f =~ m/\.(?:lst|optrpt|o|mod|smod|ok|swp)$/o);
-  goto RETURN if ($f =~ m,odb/ddl\.\w+/\w+\.(?:c|h|ddl_)$,o);
+  goto RETURN if ($f =~ m,odb/ddl\.\w+/\w+\.(?:c|ddl_)$,o);
   goto RETURN if ($f =~ m/\.(?:F90|F)\.xml$/o);
 
   $ret = 1;
