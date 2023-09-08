@@ -102,7 +102,14 @@ sub call
       my $code = &slurp ($file);
       my @code = grep { !/^\s*!/o } split (m/\n/o, $code);
       $code = join (";", @code);
-      $call{$file} = [$code =~ m/\bCALL\s+(\w+)/goms];
+      my @call = ($code =~ m/\bCALL\s+(\S+)/goms);
+      for (@call)
+        {
+          s/\(.*//o;
+        }
+
+
+      $call{$file} = \@call;
     }
 
   return $call{$file};
@@ -134,6 +141,8 @@ use Data::Dumper;
 use FileHandle;
 use File::Basename;
 use FindBin qw ($Bin);
+use Getopt::Long;
+
 use lib "$Bin/perl5";
 
 eval "use GraphViz2;";
@@ -154,6 +163,9 @@ die ("The `dot' executable (from graphviz) was not found in your PATH\n");
 
 FOUND:
 
+my @opts_s = qw (rankdir skip);
+my %opts = (rankdir => 'LR', 'skip' => '');
+&GetOptions (map { ("$_=s", \$opts{$_}) } @opts_s);
 
 my $f2f = 'scan'->scan ();
 
@@ -165,7 +177,9 @@ my @q = @ARGV; # Routines to process
 my %skip1 = map { ($_, 1) } qw (DR_HOOK ABOR1_SFX ABOR1 WRSCMR SC2PRG VERDISINT VEXP NEW_ADD_FIELD_3D ADD_FIELD_3D FMLOOK_LL
                                 FMWRIT LES_MEAN_SUBGRID SECOND_MNH ABORT_SURF SURF_INQ SHIFT ABORT LFAECRR FLUSH LFAFER LFAECRI LFAOUV LFAECRC
                                 LFAPRECR NEW_ADD_FIELD_2D ADD_FIELD_2D WRITEPROFILE WRITEMUSC WRITEPHYSIO CONVECT_SATMIXRATIO COMPUTE_FRAC_ICE
-                                TRIDIA LFAPRECI PPP2DUST GET_LUOUT ALLOCATE DEALLOCATE PUT GET SAVE_INPUTS GET_FRAC_N DGEMM SGEMM);
+                                TRIDIA LFAPRECI PPP2DUST GET_LUOUT ALLOCATE DEALLOCATE PUT GET SAVE_INPUTS GET_FRAC_N DGEMM SGEMM),
+                            split (m/,/o, $opts{skip});
+
 
 sub add
 {
@@ -173,6 +187,8 @@ sub add
 # Add a routine to the graph
 
   my $name = shift;
+
+
   return if (exists $g{$name});
   $g{$name} ||= [];
   my $file = $f2f->{$name};
@@ -215,7 +231,6 @@ while (my $name = shift (@q))
     
   }
 
-
 # Single link, even for multiple calls
 
 while (my ($k, $v) = each (%g))
@@ -240,8 +255,7 @@ sub color
 
 my $root = join ('-', sort @root);
 
-my $g = 'GraphViz2'->new (graph => {rankdir => 'LR', ordering => 'out'}, global => {rank => 'source'});
-#my $g = 'GraphViz2'->new (graph => {rankdir => 'TB', ordering => 'out'}, global => {rank => 'source'});
+my $g = 'GraphViz2'->new (graph => {rankdir => $opts{rankdir}, ordering => 'out'}, global => {rank => 'source'});
 
 while (my ($k, $v) = each (%g))
   {
