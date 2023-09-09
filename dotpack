@@ -279,7 +279,7 @@ while (my $name = shift (@q))
         &add ($call);
         push @{ $g{$name} }, $call;
         push @q, $call unless ($seen{$call}++);
-        $drhook{$call} =2 if ($drhook{$call} && $drhook{$name});
+        $drhook{$call} = 2 if ($drhook{$call} && (($drhook{$name} || 0) > 1));
       }
     
   }
@@ -303,7 +303,7 @@ while (my ($k, $v) = each (%g))
 sub color
 {
   my $name = shift;
-  return unless ($drhook{$name} > 1);
+  return unless (($drhook{$name} || 0) > 1);
   return (style => 'filled', fillcolor => $opts{'drhook-color'}, color => 'black');
 }
 
