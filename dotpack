@@ -166,7 +166,7 @@ sub read
           ($Name, $Thread) = ($line, 1); 
         }
 
-      $Name{$Name}++;
+      $Name{$Name} = 1;
     }   
 
   return \%Name;
@@ -202,17 +202,22 @@ die ("The `dot' executable (from graphviz) was not found in your PATH\n");
 
 FOUND:
 
-my @opts_s = qw (rankdir skip drhook);
-my %opts = (rankdir => 'LR', 'skip' => '', drhook => '');
-&GetOptions (map { ("$_=s", \$opts{$_}) } @opts_s);
+my @opts_s = qw (rankdir skip drhook drhook-color);
+my @opts_f = qw (drhook-skip);
+my %opts = (rankdir => 'LR', 'skip' => '', drhook => '', 'drhook-color' => 'red');
+&GetOptions 
+(
+  map ({ ("$_=s", \$opts{$_}) } @opts_s),
+  map ({ ("$_", \$opts{$_}) } @opts_f),
+);
 
 my $f2f = 'scan'->scan ();
 
-my %color;
+my %drhook;
 
 if ($opts{drhook})
   {
-    %color = %{ 'drhook'->read ($opts{drhook}) };
+    %drhook = %{ 'drhook'->read ($opts{drhook}) };
   }
 
 my %g; # Graph
@@ -251,6 +256,7 @@ sub add
 
 for my $q (@q)
   {
+    $drhook{$q} = 2 if ($drhook{$q});
     &add ($q);
   }
 
@@ -273,6 +279,7 @@ while (my $name = shift (@q))
         &add ($call);
         push @{ $g{$name} }, $call;
         push @q, $call unless ($seen{$call}++);
+        $drhook{$call} =2 if ($drhook{$call} && $drhook{$name});
       }
     
   }
@@ -296,8 +303,8 @@ while (my ($k, $v) = each (%g))
 sub color
 {
   my $name = shift;
-  return unless ($color{$name});
-  return (style => 'filled', color => 'red');
+  return unless ($drhook{$name} > 1);
+  return (style => 'filled', fillcolor => $opts{'drhook-color'}, color => 'black');
 }
 
 my $root = join ('-', sort @root);
@@ -307,10 +314,18 @@ my $g = 'GraphViz2'->new (graph => {rankdir => $opts{rankdir}, ordering => 'out'
 while (my ($k, $v) = each (%g))
   {
     next if ($k =~ m/%/o); # Do not report method call
+
+    my $skip = $opts{'drhook-skip'} && (($drhook{$k} || 0) < 2);
+    next if ($skip);
+
     $g->add_node (name => $k, label => "$k\n$L{$k}", shape => 'box', &color ($k));
     for my $v (@$v)
       {   
         next if ($v =~ m/%/o); # Do not report method call
+
+        my $skip = $opts{'drhook-skip'} && (($drhook{$v} || 0) < 2);
+        next if ($skip);
+
         $g->add_edge (from => $k, to => $v);
       }   
   }
