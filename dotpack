@@ -99,10 +99,12 @@ sub call
 
   unless (exists $call{$file})
     {
-      my $code = &slurp ($file);
+      my $code = uc (&slurp ($file));
       my @code = grep { !/^\s*!/o } split (m/\n/o, $code);
-      $code = join (";", @code);
+      $code = join (" ; ", @code);
+
       my @call = ($code =~ m/\bCALL\s+(\S+)/goms);
+
       for (@call)
         {
           s/\(.*//o;
@@ -134,6 +136,43 @@ sub size
   return $size{$file};
 }
 
+package drhook;
+
+use strict;
+
+sub read
+{
+  shift;
+  my ($f) = @_; 
+
+  my @line = do { my $fh = 'FileHandle'->new ("<$f"); <$fh> };
+  shift (@line) for (1 .. 13); 
+
+  my %Name;
+
+  for my $line (@line)
+    {   
+      chomp ($line);
+
+      $line =~ s/^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+//go;
+      my ($Rank, $Time, $Cumul, $Self, $Total, $Calls, $SelfPerCall, $TotalPerCall) = ($1, $2, $3, $4, $5, $6, $7, $8);
+
+
+      $line =~ s/^\*//o;
+      my ($Name, $Thread);
+
+      unless (($Name, $Thread) = ($line =~ m/^(.*)\@(\d+)$/o))
+        {
+          ($Name, $Thread) = ($line, 1); 
+        }
+
+      $Name{$Name}++;
+    }   
+
+  return \%Name;
+}
+
+
 package main;
 
 use strict;
@@ -163,11 +202,18 @@ die ("The `dot' executable (from graphviz) was not found in your PATH\n");
 
 FOUND:
 
-my @opts_s = qw (rankdir skip);
-my %opts = (rankdir => 'LR', 'skip' => '');
+my @opts_s = qw (rankdir skip drhook);
+my %opts = (rankdir => 'LR', 'skip' => '', drhook => '');
 &GetOptions (map { ("$_=s", \$opts{$_}) } @opts_s);
 
 my $f2f = 'scan'->scan ();
+
+my %color;
+
+if ($opts{drhook})
+  {
+    %color = %{ 'drhook'->read ($opts{drhook}) };
+  }
 
 my %g; # Graph
 my %L; # Size
@@ -250,7 +296,8 @@ while (my ($k, $v) = each (%g))
 sub color
 {
   my $name = shift;
-  return ();
+  return unless ($color{$name});
+  return (style => 'filled', color => 'red');
 }
 
 my $root = join ('-', sort @root);
