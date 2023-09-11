@@ -107,6 +107,7 @@ sub call
 
       for (@call)
         {
+          s/\&.*//o;
           s/\(.*//o;
         }
 
@@ -202,9 +203,10 @@ die ("The `dot' executable (from graphviz) was not found in your PATH\n");
 
 FOUND:
 
-my @opts_s = qw (rankdir skip drhook drhook-color);
-my @opts_f = qw (drhook-skip);
-my %opts = (rankdir => 'LR', 'skip' => '', drhook => '', 'drhook-color' => 'red');
+my @opts_s = qw (rankdir skip drhook color color-list color-hash);
+my @opts_f = qw (drhook-only);
+my %opts = (rankdir => 'LR', 'skip' => '', drhook => '', 'color' => 'red', 'color-list' => '', 'color-hash' => '');
+
 &GetOptions 
 (
   map ({ ("$_=s", \$opts{$_}) } @opts_s),
@@ -213,12 +215,18 @@ my %opts = (rankdir => 'LR', 'skip' => '', drhook => '', 'drhook-color' => 'red'
 
 my $f2f = 'scan'->scan ();
 
-my %drhook;
+my %color_list;
 
 if ($opts{drhook})
   {
-    %drhook = %{ 'drhook'->read ($opts{drhook}) };
+    %color_list = %{ 'drhook'->read ($opts{drhook}) };
   }
+else
+  {
+    %color_list = map { ($_, 2) } split (m/,/o, $opts{'color-list'});
+  }
+
+my %color_hash = split (m/,/o, $opts{'color-hash'});
 
 my %g; # Graph
 my %L; # Size
@@ -256,7 +264,7 @@ sub add
 
 for my $q (@q)
   {
-    $drhook{$q} = 2 if ($drhook{$q});
+    $color_list{$q} = 2 if ($color_list{$q});
     &add ($q);
   }
 
@@ -279,7 +287,7 @@ while (my $name = shift (@q))
         &add ($call);
         push @{ $g{$name} }, $call;
         push @q, $call unless ($seen{$call}++);
-        $drhook{$call} = 2 if ($drhook{$call} && (($drhook{$name} || 0) > 1));
+        $color_list{$call} = 2 if ($color_list{$call} && (($color_list{$name} || 0) > 1));
       }
     
   }
@@ -303,8 +311,9 @@ while (my ($k, $v) = each (%g))
 sub color
 {
   my $name = shift;
-  return unless (($drhook{$name} || 0) > 1);
-  return (style => 'filled', fillcolor => $opts{'drhook-color'}, color => 'black');
+  return unless (($color_list{$name} || 0) > 1);
+  my $color = $color_hash{$name} || $opts{color};
+  return (style => 'filled', fillcolor => $color, color => 'black');
 }
 
 my $root = join ('-', sort @root);
@@ -315,7 +324,7 @@ while (my ($k, $v) = each (%g))
   {
     next if ($k =~ m/%/o); # Do not report method call
 
-    my $skip = $opts{'drhook-skip'} && (($drhook{$k} || 0) < 2);
+    my $skip = $opts{'drhook-only'} && (($color_list{$k} || 0) < 2);
     next if ($skip);
 
     $g->add_node (name => $k, label => "$k\n$L{$k}", shape => 'box', &color ($k));
@@ -323,7 +332,7 @@ while (my ($k, $v) = each (%g))
       {   
         next if ($v =~ m/%/o); # Do not report method call
 
-        my $skip = $opts{'drhook-skip'} && (($drhook{$v} || 0) < 2);
+        my $skip = $opts{'drhook-only'} && (($color_list{$v} || 0) < 2);
         next if ($skip);
 
         $g->add_edge (from => $k, to => $v);

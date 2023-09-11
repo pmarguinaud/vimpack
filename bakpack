@@ -1,6 +1,18 @@
 #!/usr/bin/perl -w
 #
 
+=head1 NAME
+
+bakpack
+
+=head1 SYNOPSIS
+
+=head1 AUTHORS
+
+philippe.marguinaud@meteo.fr
+
+=cut
+
 package ftp;
 
 use strict;

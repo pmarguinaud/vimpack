@@ -9,7 +9,7 @@ cat -> README.md << EOF
 
 EOF
 
-for f in vimpack gitpack tarpack lstpack fixpack gdbpack ddtpack dotpack
+for f in vimpack gitpack tarpack lstpack fixpack gdbpack ddtpack dotpack bakpack
 do
 
   md=doc/$f.md  
