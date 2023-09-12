@@ -321,6 +321,13 @@ if ($opts{b})
             use File::Basename;
             unshift (@bt, &basename ($1) . ":$2");
           }
+# EcDrhook
+#       2179 [EC_DRHOOK:belenosndl0:1:1:72722:72722] [20230912:073752:1.114] [LinuxTraceBack] [06]: MASTERODB() [0xfeb397e] : field_array_module_update_view_field_3rb_array_() at field_array_module.F90:401
+        elsif (m/^(?:\d+\s+)?\[EC_DRHOOK:.*\[0x\w+\]\s*:\s*.*\s+at\s+(\S+):(\d+)\s*$/o)
+          {
+
+            unshift (@bt, "$1:$2");
+          }
 
       }
     unshift (@ARGV, reverse (@bt));
