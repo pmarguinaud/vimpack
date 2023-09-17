@@ -4,12 +4,22 @@ use strict;
 
 use base qw (dotpack::caller);
 
+sub new
+{
+  my $class = shift;
+  my %opts = @_;
+  my $self = $class->SUPER::new (%opts);
+  $self->readDrHook ();
+  return $self;
+}
+
 sub readDrHook
 {
-  shift;
-  my ($f) = @_; 
+  my $self = shift;
 
-  my @line = do { my $fh = 'FileHandle'->new ("<$f"); <$fh> };
+  my $file = $self->{drhook};
+
+  my @line = do { my $fh = 'FileHandle'->new ("<$file"); <$fh> };
   shift (@line) for (1 .. 13); 
 
   my %Name;
@@ -33,7 +43,53 @@ sub readDrHook
       $Name{$Name} = 1;
     }   
 
-  return \%Name;
+  $self->{drhook} = \%Name;
+}
+
+sub skip
+{
+  my ($self, $unit) = @_;
+  return ((! $self->{drhook}{$unit}) || $self->SUPER::skip ($unit));
+}
+
+sub pruneGraph
+{
+  my ($self, @unit) = @_;
+  
+  my %seen;
+
+  my $walk;
+
+  $walk = sub
+  {
+    my $k = shift;
+    return if ($self->skip ($k));
+    return if ($seen{$k}++);
+    for my $v (@{ $self->{graph}{$k} })
+      {
+        $walk->($v);
+      }
+  };
+
+  $walk->($_) for (@unit);
+
+  for my $k (keys (%{ $self->{graph} }))
+    {
+      next if ($seen{$k});
+      delete $self->{graph}{$k};
+    }
+
+}
+
+sub graph
+{
+  my ($self, @unit) = @_;
+
+  $self->createGraph (@unit);
+
+  $self->pruneGraph (@unit);
+
+  $self->renderGraph ();
 }
 
 1;
