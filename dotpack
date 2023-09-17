@@ -203,9 +203,13 @@ die ("The `dot' executable (from graphviz) was not found in your PATH\n");
 
 FOUND:
 
-my @opts_s = qw (rankdir skip drhook color color-list color-hash);
-my @opts_f = qw (drhook-only skip-usual);
-my %opts = (rankdir => 'LR', 'skip' => '', drhook => '', 'color' => 'red', 'color-list' => '', 'color-hash' => '');
+my @opts_s = qw (rankdir skip drhook color color-list color-hash openacc-color parallel-color);
+my @opts_f = qw (drhook-only skip-usual openacc parallel);
+my %opts = 
+(
+  rankdir => 'LR', 'skip' => '', drhook => '', 'color' => 'white', 'color-list' => '', 
+  'color-hash' => '', 'openacc-color' => 'green', 'parallel-color' => 'red',
+);
 
 &GetOptions 
 (
@@ -315,8 +319,23 @@ while (my ($k, $v) = each (%g))
 sub color
 {
   my $name = shift;
-  return unless (($color_list{$name} || 0) > 1);
-  my $color = $color_hash{$name} || $opts{color};
+
+  my $color;
+
+  if ($opts{openacc} && ($f2f->{"${name}_OPENACC"}))
+    {
+      $color = $opts{'openacc-color'};
+    }
+  elsif ($opts{parallel} && ($f2f->{"${name}_PARALLEL"}))
+    {
+      $color = $opts{'parallel-color'};
+    }
+  else
+    {
+      return unless (($color_list{$name} || 0) > 1);
+      $color = $color_hash{$name} || $opts{color};
+    }
+
   return (style => 'filled', fillcolor => $color, color => 'black');
 }
 
