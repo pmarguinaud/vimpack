@@ -2,7 +2,9 @@ package dotpack::drhook;
 
 use strict;
 
-sub read
+use base qw (dotpack::caller);
+
+sub readDrHook
 {
   shift;
   my ($f) = @_; 

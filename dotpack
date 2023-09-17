@@ -35,8 +35,8 @@ use Getopt::Long;
 use lib "$Bin/lib";
 use lib "$Bin/perl5";
 
-use dotpack::call;
-use dotpack::drhook;
+use dotpack::finder;
+use dotpack::graphv;
 
 
 eval "use GraphViz2;";
@@ -57,7 +57,7 @@ die ("The `dot' executable (from graphviz) was not found in your PATH\n");
 
 FOUND:
 
-my @opts_s = qw (rankdir skip drhook color color-list color-hash openacc-color parallel-color);
+my @opts_s = qw (rankdir skip drhook color color-list color-hash openacc-color parallel-color class);
 my @opts_f = qw (drhook-only skip-usual openacc parallel);
 my %opts = 
 (
@@ -70,6 +70,14 @@ my %opts =
   map ({ ("$_=s", \$opts{$_}) } @opts_s),
   map ({ ("$_", \$opts{$_}) } @opts_f),
 );
+
+my $finder = 'dotpack::finder'->new ();
+
+my $call = 'dotpack::graphv'->new (finder => $finder, %opts);
+
+$call->graph (@ARGV);
+
+__END__
 
 my $f2f = 'dotpack::call'->scan ();
 
@@ -121,7 +129,7 @@ sub add
       $L{$name} = '';
       return;
     }
-  $L{$name} = 'dotpack::scan'->size ($file);
+  $L{$name} = 'dotpack::call'->size ($file);
 }
 
 for my $q (@q)
@@ -138,7 +146,7 @@ while (my $name = shift (@q))
 
     next unless ($file);
 
-    my @call = @{ 'scan'->call ($file) };
+    my @call = @{ 'dotpack::call'->call ($file) };
     
     @call = 
        grep { ! m/^(?:GSTAT|MPL_|JFH_)/o } 
