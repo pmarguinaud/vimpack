@@ -1,8 +1,8 @@
-package dotpack::drhook;
+package dotpack::caller::selector::drhook;
 
 use strict;
 
-use base qw (dotpack::caller);
+use base qw (dotpack::caller::selector::basic);
 
 sub new
 {
@@ -52,9 +52,9 @@ sub skip
   return ((! $self->{drhook}{$unit}) || $self->SUPER::skip ($unit));
 }
 
-sub pruneGraph
+sub filter
 {
-  my ($self, @unit) = @_;
+  my ($self, $graph, @unit) = @_;
   
   my %seen;
 
@@ -65,7 +65,7 @@ sub pruneGraph
     my $k = shift;
     return if ($self->skip ($k));
     return if ($seen{$k}++);
-    for my $v (@{ $self->{graph}{$k} })
+    for my $v (@{ $graph->{$k} })
       {
         $walk->($v);
       }
@@ -73,23 +73,12 @@ sub pruneGraph
 
   $walk->($_) for (@unit);
 
-  for my $k (keys (%{ $self->{graph} }))
+  for my $k (keys (%{ $graph }))
     {
       next if ($seen{$k});
-      delete $self->{graph}{$k};
+      delete $graph->{$k};
     }
 
-}
-
-sub graph
-{
-  my ($self, @unit) = @_;
-
-  $self->createGraph (@unit);
-
-  $self->pruneGraph (@unit);
-
-  $self->renderGraph ();
 }
 
 1;

@@ -6,6 +6,8 @@ use FileHandle;
 use File::Basename;
 use File::Find;
 
+use dotpack::caller::selector;
+
 use base qw (dotpack::graphv);
 
 sub new
@@ -13,7 +15,9 @@ sub new
   my $class = shift;
   my %opts = @_;
   my $self = bless {call => {}, %opts}, $class;
-  $self->{skip} = {map { ($_, 1) } split (m/,/o, $opts{skip})};
+
+  $self->{selector} = 'dotpack::caller::selector'->new (%opts);
+
   return $self;
 }
 
@@ -49,12 +53,6 @@ sub color
 {
 }
 
-sub skip
-{
-  my ($self, $name) = @_;
-  return $self->{skip}{$name};
-}
-
 sub createGraph
 {
   my ($self, @unit) = @_;
@@ -86,12 +84,12 @@ sub renderGraph
 
   while (my ($k, $v) = each (%{ $self->{graph} }))
     {
-      next if ($self->skip ($k));
+      next if ($self->{selector}->skip ($k));
 
       $g->add_node (name => $k, label => "$k", shape => 'box', $self->color ($k));
       for my $v (@$v)
         {   
-          next if ($self->skip ($v));
+          next if ($self->{selector}->skip ($v));
           $g->add_edge (from => $k, to => $v);
         }   
     }
@@ -113,6 +111,9 @@ sub graph
   my ($self, @unit) = @_;
 
   $self->createGraph (@unit);
+
+  $self->{selector}->filter ($self->{graph}, @unit);
+
   $self->renderGraph ();
 }
 

@@ -3,7 +3,6 @@ package dotpack::graphv;
 use strict;
 
 use dotpack::caller;
-use dotpack::drhook;
 
 sub new
 {
