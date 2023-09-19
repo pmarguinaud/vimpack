@@ -5,8 +5,10 @@ use Data::Dumper;
 use FileHandle;
 use File::Basename;
 use File::Find;
+use Storable;
 
 use dotpack::caller::selector;
+use dotpack::caller::colorizer;
 
 use base qw (dotpack::graphv);
 
@@ -17,6 +19,7 @@ sub new
   my $self = bless {call => {}, %opts}, $class;
 
   $self->{selector} = 'dotpack::caller::selector'->new (%opts);
+  $self->{colorizer} = 'dotpack::caller::colorizer'->new (%opts);
 
   return $self;
 }
@@ -49,10 +52,6 @@ sub getCallees
   return $self->{call}{$name};
 }
 
-sub color
-{
-}
-
 sub createGraph
 {
   my ($self, @unit) = @_;
@@ -70,6 +69,7 @@ sub createGraph
       push @unit, grep { ! $self->{graph}{$_} } @$call;
     }
 
+  $self->{graph0} = &Storable::dclone ($self->{graph});
 }
 
 sub renderGraph
@@ -86,7 +86,11 @@ sub renderGraph
     {
       next if ($self->{selector}->skip ($k));
 
-      $g->add_node (name => $k, label => "$k", shape => 'box', $self->color ($k));
+      $g->add_node 
+        (
+          name => $k, label => "$k", shape => 'box', 
+          $self->{colorizer}->color (name => $k, graph => $self->{graph0})
+        );
       for my $v (@$v)
         {   
           next if ($self->{selector}->skip ($v));

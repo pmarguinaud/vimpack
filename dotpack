@@ -57,12 +57,13 @@ die ("The `dot' executable (from graphviz) was not found in your PATH\n");
 
 FOUND:
 
-my @opts_s = qw (rankdir skip drhook color color-list color-hash openacc-color parallel-color class selector);
+my @opts_s = qw (rankdir skip drhook color color-list color-hash openacc-color parallel-color class selector colorizer);
 my @opts_f = qw (drhook-only skip-usual openacc parallel);
 my %opts = 
 (
   rankdir => 'LR', 'skip' => '', drhook => '', 'color' => 'white', 'color-list' => '', 
   'color-hash' => '', 'openacc-color' => 'green', 'parallel-color' => 'red', 'selector' => 'basic',
+  'colorizer' => 'basic',
 );
 
 &GetOptions 
