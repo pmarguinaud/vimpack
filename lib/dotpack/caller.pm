@@ -9,6 +9,7 @@ use Storable;
 
 use dotpack::caller::selector;
 use dotpack::caller::colorizer;
+use dotpack::caller::content;
 
 use base qw (dotpack::graphv);
 
@@ -20,6 +21,7 @@ sub new
 
   $self->{selector} = 'dotpack::caller::selector'->new (%opts);
   $self->{colorizer} = 'dotpack::caller::colorizer'->new (%opts);
+  $self->{content} = 'dotpack::caller::content'->new (%opts);
 
   return $self;
 }
@@ -88,7 +90,8 @@ sub renderGraph
 
       $g->add_node 
         (
-          name => $k, label => "$k", shape => 'box', 
+          name => $k, shape => 'box', 
+          label => $self->{content}->label (name => $k, finder => $self->{finder}), 
           $self->{colorizer}->color (name => $k, graph => $self->{graph0}, finder => $self->{finder})
         );
       for my $v (@$v)
