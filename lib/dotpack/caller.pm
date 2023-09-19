@@ -89,7 +89,7 @@ sub renderGraph
       $g->add_node 
         (
           name => $k, label => "$k", shape => 'box', 
-          $self->{colorizer}->color (name => $k, graph => $self->{graph0})
+          $self->{colorizer}->color (name => $k, graph => $self->{graph0}, finder => $self->{finder})
         );
       for my $v (@$v)
         {   

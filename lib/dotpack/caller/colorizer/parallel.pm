@@ -1,6 +1,7 @@
 package dotpack::caller::colorizer::parallel;
 
 use strict;
+use Data::Dumper;
 
 use base qw (dotpack::caller::colorizer::basic);
 
@@ -8,13 +9,13 @@ sub color
 {
   my ($self, %opts) = @_;
   my $name = $opts{name};
-  my $graph = $opts{graph};
+  my $finder = $opts{finder};
   
-  if ($graph->{"${name}_OPENACC"})
+  if ($finder->getFileFromUnit ("${name}_OPENACC"))
     {
       return (style => 'filled', fillcolor => 'green', color => 'black');
     }
-  elsif ($graph->{"${name}_OPENACC"})
+  elsif ($finder->getFileFromUnit ("${name}_PARALLEL"))
     {
       return (style => 'filled', fillcolor => 'red', color => 'black');
     }
