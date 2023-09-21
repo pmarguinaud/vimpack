@@ -15,6 +15,14 @@ sub new
   return $self;
 }
 
+sub getopts
+{
+  shift;
+  my %args = @_;
+  push @{$args{opts_s}}, qw (drhook);
+  $args{opts}{drhook} = '';
+}
+
 sub color
 {
   my ($self, %opts) = @_;

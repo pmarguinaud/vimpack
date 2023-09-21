@@ -2,6 +2,8 @@ package dotpack::caller::selector::drhook;
 
 use strict;
 
+use Data::Dumper;
+
 use base qw (dotpack::caller::selector::basic);
 
 use drhook;
@@ -13,6 +15,15 @@ sub new
   my $self = $class->SUPER::new (%opts);
   $self->{drhook} = &drhook::read ($self->{drhook});
   return $self;
+}
+
+sub getopts
+{
+  shift;
+  my %args = @_;
+
+  push @{$args{opts_s}}, qw (drhook);
+  $args{opts}{drhook} = '';
 }
 
 sub skip

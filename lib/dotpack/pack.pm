@@ -12,20 +12,27 @@ sub new
 {
   my $class = shift;
   my $self = bless {}, $class;
+
   if (-f ".dotpack.pl")
     {
       $self->{f2f} = do ("./.dotpack.pl");
     }
   else
     {
-      $self->scan ();
+      my @view = do { my $fh = 'FileHandle'->new ("<.gmkview"); my @v = <$fh>; chomp for (@v); @v };
+      shift (@view);
+      $self->{f2f} = $self->scan (@view);
+      'FileHandle'->new (">.dotpack.pl")->print (&Dumper ($self->{f2f}));
     }
+  my $f2f = $self->scan ('local');
+  $self->{f2f} = {%{ $self->{f2f} }, %$f2f};
   return $self;
 }
 
+
 sub scan
 {
-  my $self = shift;
+  my ($self, @view) = @_;
 
   my %f2f;
   my %seen;
@@ -42,16 +49,13 @@ sub scan
     $f2f{$s} = $f;
   };
   
-  my @view = do { my $fh = 'FileHandle'->new ("<.gmkview"); my @v = <$fh>; chomp for (@v); @v };
   
   for my $view (@view)
     {
       &find ({wanted => $wanted, no_chdir => 1}, "src/$view/");
     }
   
-  'FileHandle'->new (">.dotpack.pl")->print (&Dumper (\%f2f));
-
-  $self->{f2f} = \%f2f;
+  return \%f2f;
 }
 
 sub getFileFromUnit

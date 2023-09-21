@@ -15,4 +15,11 @@ sub new
   return $self;
 }
 
+sub getopts
+{
+  shift;
+  my %opts = @_;
+
+}
+
 1;

@@ -23,5 +23,11 @@ sub color
   return $self->SUPER::color (%opts);
 }
 
+sub getopts
+{
+  shift;
+  my %args = @_;
+}
+
 
 1;

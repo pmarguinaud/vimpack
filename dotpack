@@ -30,6 +30,7 @@ use Data::Dumper;
 use FileHandle;
 use File::Basename;
 use FindBin qw ($Bin);
+use List::MoreUtils qw (uniq);
 use Getopt::Long;
 
 use lib "$Bin/lib";
@@ -57,14 +58,14 @@ die ("The `dot' executable (from graphviz) was not found in your PATH\n");
 
 FOUND:
 
-my @opts_s = qw (rankdir skip drhook color color-list color-hash openacc-color parallel-color class selector colorizer content);
-my @opts_f = qw (drhook-only skip-usual openacc parallel);
-my %opts = 
-(
-  rankdir => 'LR', 'skip' => '', drhook => '', 'color' => 'white', 'color-list' => '', 
-  'color-hash' => '', 'openacc-color' => 'green', 'parallel-color' => 'red', 'selector' => 'basic',
-  'colorizer' => 'basic', 'content' => 'basic',
-);
+my @opts_s = qw (class);
+my @opts_f = qw (help);
+my %opts;
+
+'dotpack::graphv'->getopts (opts_s => \@opts_s, opts_f => \@opts_f, opts => \%opts);
+
+@opts_s = &uniq (@opts_s);
+@opts_f = &uniq (@opts_f);
 
 &GetOptions 
 (
@@ -72,159 +73,22 @@ my %opts =
   map ({ ("$_", \$opts{$_}) } @opts_f),
 );
 
+if ($opts{help})
+  {
+    print "Usage: ", &basename ($0), "\n";
+    for (sort @opts_s)
+      {
+        print "  --$_ <string>\n";
+      }
+    for (sort @opts_f)
+      {
+        print "  --$_\n";
+      }
+  }
+
 my $finder = 'dotpack::finder'->new ();
 
 my $call = 'dotpack::graphv'->new (finder => $finder, %opts);
 
 $call->graph (@ARGV);
-
-__END__
-
-my $f2f = 'dotpack::call'->scan ();
-
-my %color_list;
-
-if ($opts{drhook})
-  {
-    %color_list = %{ 'dotpack::drhook'->read ($opts{drhook}) };
-  }
-else
-  {
-    %color_list = map { ($_, 2) } split (m/,/o, $opts{'color-list'});
-  }
-
-my %color_hash = split (m/,/o, $opts{'color-hash'});
-
-my %g; # Graph
-my %L; # Size
-
-my @q = @ARGV; # Routines to process
-
-if ($opts{'skip-usual'})
-  {
-    $opts{skip} .= ',' if ($opts{skip});
-    $opts{skip} .= join (',', qw (DR_HOOK ABOR1_SFX ABOR1 WRSCMR SC2PRG VERDISINT VEXP NEW_ADD_FIELD_3D ADD_FIELD_3D FMLOOK_LL FIELD_NEW FIELD_DELETE
-                                  FMWRIT LES_MEAN_SUBGRID SECOND_MNH ABORT_SURF SURF_INQ SHIFT ABORT LFAECRR FLUSH LFAFER LFAECRI LFAOUV LFAECRC
-                                  LFAPRECR NEW_ADD_FIELD_2D ADD_FIELD_2D WRITEPROFILE WRITEMUSC WRITEPHYSIO CONVECT_SATMIXRATIO COMPUTE_FRAC_ICE
-                                  TRIDIA LFAPRECI PPP2DUST GET_LUOUT ALLOCATE DEALLOCATE PUT GET SAVE_INPUTS GET_FRAC_N DGEMM SGEMM ABOR1_ACC));
-  }
-
-my %skip1 = map { ($_, 1) } split (m/,/o, $opts{skip});
-
-sub add
-{
-
-# Add a routine to the graph
-
-  my $name = shift;
-
-
-  return if (exists $g{$name});
-  $g{$name} ||= [];
-  my $file = $f2f->{$name};
-
-# Count line numbers
-
-  unless ($file)
-    {
-      $L{$name} = '';
-      return;
-    }
-  $L{$name} = 'dotpack::call'->size ($file);
-}
-
-for my $q (@q)
-  {
-    $color_list{$q} = 2 if ($color_list{$q});
-    &add ($q);
-  }
-
-my %seen;
-
-while (my $name = shift (@q))
-  {
-    my $file = $f2f->{$name};
-
-    next unless ($file);
-
-    my @call = @{ 'dotpack::call'->call ($file) };
-    
-    @call = 
-       grep { ! m/^(?:GSTAT|MPL_|JFH_)/o } 
-       grep { ! $skip1{$_} } @call;
-
-    for my $call (@call)
-      {
-        &add ($call);
-        push @{ $g{$name} }, $call;
-        push @q, $call unless ($seen{$call}++);
-        $color_list{$call} = 2 if ($color_list{$call} && (($color_list{$name} || 0) > 1));
-      }
-    
-  }
-
-# Single link, even for multiple calls
-
-while (my ($k, $v) = each (%g))
-  {
-    my %seen;
-    @$v = grep { ! ($seen{$_}++) } grep { $g{$_} } @$v;
-  }
-
-my @root = keys (%g); # Never called by any other routine belonging to the graph
-
-while (my ($k, $v) = each (%g))
-  {
-    my %v = map { ($_, 1) } @$v;
-    @root = grep { ! $v{$_} } @root;
-  }
-
-sub color
-{
-  my $name = shift;
-
-  my $color;
-
-  if ($opts{openacc} && ($f2f->{"${name}_OPENACC"}))
-    {
-      $color = $opts{'openacc-color'};
-    }
-  elsif ($opts{parallel} && ($f2f->{"${name}_PARALLEL"}))
-    {
-      $color = $opts{'parallel-color'};
-    }
-  else
-    {
-      return unless (($color_list{$name} || 0) > 1);
-      $color = $color_hash{$name} || $opts{color};
-    }
-
-  return (style => 'filled', fillcolor => $color, color => 'black');
-}
-
-my $root = join ('-', sort @root);
-
-my $g = 'GraphViz2'->new (graph => {rankdir => $opts{rankdir}, ordering => 'out'}, global => {rank => 'source'});
-
-while (my ($k, $v) = each (%g))
-  {
-    next if ($k =~ m/%/o); # Do not report method call
-
-    my $skip = $opts{'drhook-only'} && (($color_list{$k} || 0) < 2);
-    next if ($skip);
-
-    $g->add_node (name => $k, label => "$k\n$L{$k}", shape => 'box', &color ($k));
-    for my $v (@$v)
-      {   
-        next if ($v =~ m/%/o); # Do not report method call
-
-        my $skip = $opts{'drhook-only'} && (($color_list{$v} || 0) < 2);
-        next if ($skip);
-
-        $g->add_edge (from => $k, to => $v);
-      }   
-  }
-
-$g->run (format => 'svg', output_file => "$root.svg");
-
 

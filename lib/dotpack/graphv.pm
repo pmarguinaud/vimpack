@@ -14,4 +14,11 @@ sub new
   return $self;
 }
 
+sub getopts
+{
+  shift;
+  my %args = @_;
+  'dotpack::caller'->getopts (%args);
+}
+
 1;

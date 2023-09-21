@@ -26,6 +26,43 @@ sub new
   return $self;
 }
 
+sub getopts
+{
+  shift;
+
+  my %args = @_;
+  push @{$args{opts_s}}, qw (rankdir selector colorizer content);
+  %{$args{opts}} = (%{$args{opts}}, 
+                      qw (
+                        rankdir    LR
+                        selector   basic
+                        colorizer  basic
+                        content    basic
+                        ));
+ 
+  (my $file = __PACKAGE__) =~ s,::,/,go;
+  (my $dir = $INC{"$file.pm"}) =~ s/\.pm$//o;
+  use File::Find;
+
+  my @pm;
+  &find ({wanted => sub { my $f = $File::Find::name; push @pm, $f if ($f =~ m/\.pm$/o); }, 
+          no_chdir => 1}, $dir);
+
+  my @class;
+  for (@pm)
+    {
+      s,\.pm$,,o;
+      s,^$dir,,o;
+      s,/,::,go;
+      push @class, __PACKAGE__ . $_;
+    }
+
+  for my $class (sort @class)
+    {
+      $class->getopts (%args);
+    }
+}
+
 sub getCallees
 {
   my ($self, $name) = @_;

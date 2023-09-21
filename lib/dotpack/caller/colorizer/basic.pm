@@ -17,5 +17,11 @@ sub color
   return ();
 }
 
+sub getopts
+{
+  shift;
+  my %opts = @_;
+}
+
 
 1;
