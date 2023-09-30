@@ -25,11 +25,11 @@ sub getopts
 
 sub getsubopts
 {
-  my $class = shift;
+  my $Class = shift;
 
   my %args = @_;
  
-  (my $file = $class) =~ s,::,/,go;
+  (my $file = $Class) =~ s,::,/,go;
   (my $dir = $INC{"$file.pm"}) =~ s/\.pm$//o;
   use File::Find;
 
@@ -43,7 +43,7 @@ sub getsubopts
       s,\.pm$,,o;
       s,^$dir,,o;
       s,/,::,go;
-      push @class, __PACKAGE__ . $_;
+      push @class, "$Class$_";
     }
 
   for my $class (sort @class)
