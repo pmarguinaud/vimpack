@@ -1,4 +1,4 @@
-package dotpack::caller::colorizer::basic;
+package dotpack::struct::colorizer::basic;
 
 use strict;
 use Data::Dumper;

@@ -11,16 +11,20 @@ sub color
   my $name = $opts{name};
   my $finder = $opts{finder};
   
+  my @copts = $self->SUPER::color (%opts);
+
+  @copts && return @copts;
+
   if ($finder->getFileFromUnit ("${name}_OPENACC"))
     {
-      return (style => 'filled', fillcolor => 'green', color => 'black');
+      @copts = (style => 'filled', fillcolor => 'green', color => 'black');
     }
   elsif ($finder->getFileFromUnit ("${name}_PARALLEL"))
     {
-      return (style => 'filled', fillcolor => 'red', color => 'black');
+      @copts = (style => 'filled', fillcolor => 'red', color => 'black');
     }
 
-  return $self->SUPER::color (%opts);
+  return @copts;
 }
 
 sub getopts

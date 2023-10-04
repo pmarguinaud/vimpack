@@ -29,7 +29,8 @@ sub getopts
 sub skip
 {
   my ($self, $unit) = @_;
-  return ((! $self->{drhook}{$unit}) || $self->SUPER::skip ($unit));
+  my $skip = ((! $self->{drhook}{$unit}) || $self->SUPER::skip ($unit));
+  return $skip;
 }
 
 sub filter

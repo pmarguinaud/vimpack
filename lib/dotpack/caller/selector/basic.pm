@@ -42,13 +42,7 @@ sub getopts
 
   push @{$args{opts_s}}, qw (skip);
   push @{$args{opts_f}}, qw (skip-usual);
-  %{$args{opts}} = (%{$args{opts}}, 
-                      qw (
-                        rankdir    LR
-                        selector   basic
-                        colorizer  basic
-                        content    basic
-                        ), skip => '');
+  %{$args{opts}} = (%{$args{opts}}, skip => '');
 
 }
 
