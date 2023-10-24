@@ -195,13 +195,33 @@ sub init
       &copy ($conf, '.gitpack.conf') if (-f $conf);
     }
 
-  if (my $git = $opts{repository})
+  my $pack1;
+
+  if (scalar (@view) > 1)
+    {
+      $pack1 = readlink ($view[1]); 
+      $pack1 = &dirname ($pack1) for (1 .. 2);
+    }
+
+  if (my $repo = $opts{repository})
     {
       my $p = &scanPack (@view[1..$#view]);
 
       &mkpath ("$GITPACK/");
 
-      &run (@GIT, 'clone', ($opts{branch} ? ('--branch', $opts{branch}) : ()), $git, "./$GITPACK/git");
+      if ($opts{branch})
+        {
+          &run (@GIT, 'clone', '--branch', $opts{branch}, $repo, "./$GITPACK/git");
+        }
+      elsif ($opts{commit})
+        {
+          &run (@GIT, 'clone', $repo, "./$GITPACK/git");
+          &git (cmd => ['checkout', $opts{commit}]);
+        }
+      else
+        {
+          &run (@GIT, 'clone', $repo, "./$GITPACK/git");
+        }
       
       my $g = &scanPack ("$PACK/$GITPACK/git");
 
@@ -230,34 +250,43 @@ sub init
         }
 
     }
-  elsif (scalar (@view) > 1)
+  elsif ($pack1 && (-d "$pack1/$GITPACK/git"))
     {
-      my $pack = readlink ($view[1]); $pack = &dirname ($pack) for (1 .. 2);
-
-      die unless (-d "$pack/$GITPACK/git");
-
       &mkpath ("$GITPACK/");
 
-      my $stg = stat ("$pack/$GITPACK/git");
+      my $stg = stat ("$pack1/$GITPACK/git");
       my $stG = stat ($GITPACK);
 
       if ($stg->uid () == $stG->uid ())
         {
-          &run ("cp -alf $pack/$GITPACK/git/ ./$GITPACK/git");
+          &run ("cp -alf $pack1/$GITPACK/git/ ./$GITPACK/git");
         }
       else
         {
-          &run ("cp -r $pack/$GITPACK/git/ ./$GITPACK/git");
+          &run ("cp -r $pack1/$GITPACK/git/ ./$GITPACK/git");
         }
+    }
+  elsif ($pack1 && (-f "$pack1/.populated_from"))
+    {
+      my $text = do { my $fh = 'FileHandle'->new ("<$pack1/.populated_from"); local $/ = undef; <$fh> };
+
+      my ($repo) = ($text =~ m/- IAL :\s*git\s*:\s*(\S+)/goms);
+      my ($commit) = ($text =~ m/Commit:\s*(\w+)/goms);
+      &init (%opts, repository => $repo, commit => $commit);
     }
   else
     {
-      die ("No git repository was found\n");
+      goto NOTFOUND;
     }
   
   &mkpath ("$GITPACK/tmp");
 
   'FileHandle'->new (">$gitpack_time");
+
+  return;
+
+NOTFOUND:
+  die ("No git repository was found\n");
 }
 
 sub check
