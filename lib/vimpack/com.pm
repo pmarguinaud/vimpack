@@ -76,8 +76,16 @@ sub insert
   while (defined (my $line = shift (@line)))
     {
       chomp ($line);
+# PGI/nvfortran
+# NVFORTRAN-S-0076-Subscripts specified for non-array variable zxvwei (lapineb.F90: 382)
+      if (($lst =~ m/\.lst$/o) && ($line =~ m/^NVFORTRAN-(\w)-\d+-(.*) \((\S+): (\d+)\)$/o))
+        {
+          my ($File, $Line, $Column, $Level, $Message) = ($3, $4, 1, $1, $2);
+          $Column ||= 1; $Column--; $Line--;
+          $Message{$File}[$Line][$Column]{$Level}{$Message} = 1;
+        }
 # Intel Fortran compiler .lst
-      if (($lst =~ m/\.lst$/o) && ($line =~ m/^(\S+)\((\d+)\): (warning|remark|error) #\d+: (.*)$/o))
+      elsif (($lst =~ m/\.lst$/o) && ($line =~ m/^(\S+)\((\d+)\): (warning|remark|error) #\d+: (.*)$/o))
         {
           my ($File, $Line, $Column, $Level, $Message) = ($1, $2, 1, $3, $4);
           $Column ||= 1; $Column--; $Line--;
