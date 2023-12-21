@@ -804,6 +804,6 @@ my $c = &git (cmd => [$command, @args], die => 0, chdir => (grep ({ $_ eq $comma
 
 'FileHandle'->new (">$gitpack_time");
 
-exit ($c);
+exit (! $c);
 
 
