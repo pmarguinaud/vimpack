@@ -266,12 +266,21 @@ sub init
           &run ("cp -r $pack1/$GITPACK/git/ ./$GITPACK/git");
         }
     }
-  elsif ($pack1 && (my ($bundle) = grep ({ -f } ("$pack1/.populated_from", "$pack1/bundle.yml"))))
+  elsif ($pack1 && -f (my $populated_from = "$pack1/.populated_from"))
+    {
+      my $text = do { my $fh = 'FileHandle'->new ("<$populated_from"); local $/ = undef; <$fh> };
+
+      my ($repo) = ($text =~ m/- IAL :\s*git\s*:\s*(\S+)/goms);
+      my ($commit) = ($text =~ m/Commit:\s*(\S+)/goms);
+      &init (%opts, repository => $repo, commit => $commit);
+    }
+  elsif ($pack1 && -f (my $bundle = "$pack1/bundle.yml"))
     {
       my $text = do { my $fh = 'FileHandle'->new ("<$bundle"); local $/ = undef; <$fh> };
 
       my ($repo) = ($text =~ m/- IAL :\s*git\s*:\s*(\S+)/goms);
-      my ($commit) = ($text =~ m/Commit:\s*(\w+)/goms);
+      my ($commit) = ($text =~ m/version\s*:\s*(\S+)/goms);
+
       &init (%opts, repository => $repo, commit => $commit);
     }
   else
