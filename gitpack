@@ -281,6 +281,13 @@ sub init
       my ($repo) = ($text =~ m/- IAL :\s*git\s*:\s*(\S+)/goms);
       my ($commit) = ($text =~ m/version\s*:\s*(\S+)/goms);
 
+      if ($repo =~ s/^~(\w+)//o)
+        {
+          my $user = $1;
+          my ($home) = (getpwnam ($user))[7];
+          $repo = "$home$repo";
+        }
+
       &init (%opts, repository => $repo, commit => $commit);
     }
   else
