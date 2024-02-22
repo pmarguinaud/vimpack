@@ -102,6 +102,7 @@ use Data::Dumper;
 use Storable;
 use Cwd;
 use Getopt::Long;
+use YAML;
 
 use FindBin qw ($Bin);
 
@@ -277,11 +278,18 @@ sub init
     }
   elsif ($pack1 && -f (my $bundle = "$pack1/bundle.yml"))
     {
-      my @text = grep { !/^[ ]*#/o } do { my $fh = 'FileHandle'->new ("<$bundle"); <$fh> };
-      my $text = join ("", @text);
 
-      my ($repo) = ($text =~ m/- IAL :\s*git\s*:\s*(\S+)/goms);
-      my ($commit) = ($text =~ m/version\s*:\s*(\S+)/goms);
+      my $Y = do
+      {
+        local $SIG{__WARN__} = undef;
+        local $SIG{__DIE__} = undef;
+        &YAML::LoadFile ($bundle);
+      };
+      $Y = $Y->{projects};
+      my ($IAL) = grep { $_->{IAL} } @$Y;
+      $IAL = $IAL->{IAL};
+
+      my ($repo, $commit) = ($IAL->{git}, $IAL->{version});
 
       if ($repo =~ s/^~(\w+)//o)
         {
