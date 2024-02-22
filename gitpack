@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+
 =head1 NAME
 
 gitpack
@@ -276,7 +277,8 @@ sub init
     }
   elsif ($pack1 && -f (my $bundle = "$pack1/bundle.yml"))
     {
-      my $text = do { my $fh = 'FileHandle'->new ("<$bundle"); local $/ = undef; <$fh> };
+      my @text = grep { !/^[ ]*#/o } do { my $fh = 'FileHandle'->new ("<$bundle"); <$fh> };
+      my $text = join ("", @text);
 
       my ($repo) = ($text =~ m/- IAL :\s*git\s*:\s*(\S+)/goms);
       my ($commit) = ($text =~ m/version\s*:\s*(\S+)/goms);
