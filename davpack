@@ -1,0 +1,259 @@
+#!/usr/bin/perl -w
+#
+
+use strict;
+use Cwd;
+use FileHandle;
+use File::Path;
+use File::Basename;
+use Data::Dumper;
+use Getopt::Long;
+
+sub runCommand
+{
+  my %args = @_;
+  my @cmd = @{ ${args}{command} };
+
+  print "@cmd\n" if ($args{verbose});
+
+  system (@cmd) 
+    or die ("Command `@cmd' failed\n");
+}
+
+sub davaiRunCommand
+{
+  my %args = @_;
+  my @cmd = @{ ${args}{command} };
+
+  print "@cmd\n" if ($args{verbose});
+
+  my $profile = "$ENV{HOME}/.davai_profile";
+  die unless (-f $profile);
+
+  my $out = `set -e ; source $profile > /dev/null 2>&1; @cmd`;
+  my $c = $?;
+  $c && die ("Davai command `@_' failed\n");
+
+  return $out;
+}
+
+sub davaiNewXp
+{
+  my %args = @_;
+  my $out = &davaiRunCommand (command => [qw (davai-new_xp -v), $args{version}, $args{branch}], %args);
+  my ($nrv) = ($out =~ m/=> (\S+)/goms);
+  return $nrv;
+}
+
+sub getBranch
+{
+  chomp (my $branch = `gitpack rev-parse --abbrev-ref HEAD`);
+  return $branch;
+}
+
+my %pack2davai =
+(
+  ioassign  => 'ioassign',
+  BATOR     => 'batodb',
+  lfitools  => 'lfitools',
+  MASTERODB => 'masterodb',
+  OOTESTVAR => 'oopsbinary.ifs-ootestvar',
+  OOVAR     => 'oopsbinary.ifs-oovar',
+  PGD       => 'buildpgd',
+  PREP      => 'prep',
+  MASTERODB => 'ifsmodel.ifs',
+  OOTESTVAR => 'oopsbinary.ifs-ootestcomponent',
+);
+      
+sub getGenesis
+{
+  die unless (-f '.genesis');
+  chomp (my $genesis = do { my $fh = 'FileHandle'->new ("<.genesis"); local $/ =  undef; <$fh> });
+  my @genesis = split (m/\s+/o, $genesis);
+  return @genesis;
+}
+
+sub compileBinaries
+{
+  my %args = @_;
+  my $pack = $args{pack};
+
+  my @binlist = ('MASTERODB', grep ({ $_ ne 'MASTERODB' } sort (keys (%pack2davai))));
+
+  for my $program (sort keys (%pack2davai))
+    {
+      goto COMPILE unless (-f "$pack/bin/$program");
+    }
+
+  return;
+
+COMPILE:
+
+  my @genesis = &getGenesis ();
+
+  my $binlist = join (',', map { lc ($_) } @binlist);
+
+  if (grep { $_ eq '-p' } @genesis)
+    {
+      for my $i (0 .. $#genesis)
+        {
+          if ($genesis[$i] eq '-p')
+            {
+              $genesis[$i+1] = $binlist;
+            }
+        }
+    }
+  else
+    {
+      push @genesis, (-p => $binlist);
+    }
+
+  unlink ('ics_masterodb_etc');
+
+  &runCommand (command => [@genesis], %args);
+
+  die unless (-f 'ics_masterodb_etc');
+
+  &runCommand (command => ['./ics_masterodb_etc'], %args);
+  
+
+}
+
+sub setBinaryLinks
+{
+  my %args = @_;
+  my ($pack, $nrv) = @args{qw (pack nrv)};
+
+  my ($id) = ($nrv =~ m,/(dv-\d+-\w+\@\w+)/,o);
+  
+  die unless ($id);
+  
+  my ($host, $user) = ($id =~ m/^dv-\d+-(\w+)\@(\w+)$/o);
+  
+  die unless ($host && $user);
+  
+  my $conf = "DAVAI-tests/conf/$host.ini";
+  
+  die unless (-f $conf);
+  
+  $conf = do { my $fh = 'FileHandle'->new ("<$conf"); local $/ = undef; <$fh> };
+  
+  my ($compilation_flavour) = ($conf =~ m/compilation_flavour\s*=\s*(\S+)/goms);
+  my ($executables_fmt) = ($conf =~ m/executables_fmt\s*=\s*(\S+)/goms);
+  
+  die unless ($compilation_flavour && $executables_fmt);
+  
+  $compilation_flavour = lc ($compilation_flavour);
+  
+  for my $ext ('', 's')
+    {
+      next unless (-d "$pack$ext");
+  
+      my $pack2bin = "/scratch/mtool/$user/cache/vortex/davai/nrv/$id/pack2bin.$compilation_flavour$ext";
+      
+      &mkpath ($pack2bin);
+
+      for my $bin (sort keys (%pack2davai))
+        {
+          die ("Missing `$pack$ext/bin/$bin'") unless (-f "$pack$ext/bin/$bin");
+          symlink ("$pack$ext/bin/$bin", "$pack2bin/$pack2davai{$bin}.$executables_fmt");
+        }
+  
+    }
+}
+
+sub getCycle
+{
+  my @genesis = &getGenesis ();
+  for my $i (0 .. $#genesis)
+    {
+      return $genesis[$i+1] if ($genesis[$i] eq '-r');
+    }
+}
+
+sub getVersion
+{
+  my %cycle2version =
+  (
+    '49t0' => 'DV49T0',
+    '49t1' => 'DV49T1',
+  );
+
+  my $cycle = &getCycle ();
+  
+  return $cycle2version{$cycle};
+}
+
+my %opts = (version => &getVersion ());
+my @opts_f = qw (verbose dryrun help reuse);
+my @opts_s = qw (version);
+
+sub help
+{
+  print "Usage: " . &basename ($0) . "\n" 
+      . " Options:\n" . join ('', map { "   --$_\n" } @opts_f, @opts_s);
+}
+
+&GetOptions
+(
+  (map { ($_, \$opts{$_}) } @opts_f),
+  (map { ("$_=s", \$opts{$_}) } @opts_s),
+);
+
+if ($opts{help})
+  {
+    &help (); 
+    exit (0);
+  }
+
+die unless (-d '.gitpack');
+
+my $pack = &cwd ();
+
+for my $ext ('', 's')
+  {
+    &compileBinaries (pack => "$pack$ext", %opts) if (-d "$pack$ext");
+  }
+
+my ($nrv, $nrvx);
+
+
+if ($opts{reuse})
+  {
+    for (my $i = 0; ; $i++)
+      {
+        last unless (-l "nrv.$i");
+        $nrvx = "$pack/nrv.$i";
+        $nrv = readlink ($nrvx);
+      }
+  }
+else
+  {
+    ($nrv, $nrvx) = (&davaiNewXp (branch => &getBranch (), %opts));
+    
+    for (my $i = 0; ; $i++)
+      {
+        if (! -d "nrv.$i")
+          {
+            symlink ($nrv, "nrv.$i");
+            $nrvx = "$pack/nrv.$i";
+            last;
+          }
+      }
+  }
+
+die unless ($nrv && $nrvx);
+
+chdir ($nrvx);
+
+if (! $opts{reuse})
+  {
+    &setBinaryLinks (pack => $pack, nrv => $nrv, %opts);
+    &davaiRunCommand (command => ['davai-ciboulai_init'], %opts);
+  }
+
+&davaiRunCommand (command => ['davai-run_tests'], %opts) unless ($opts{'dryrun'});
+
+
+
+

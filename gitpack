@@ -377,7 +377,7 @@ sub git
   return ! $c;
 }
 
-my @r = qw (branch push status log show commit fetch diff tag remote difftool blame);
+my @r = qw (branch push status log show commit fetch diff tag remote difftool blame rev-parse);
 my @w = qw (checkout pull merge reset mergetool cherry-pick);
 my @chdir = qw (mergetool);
 
