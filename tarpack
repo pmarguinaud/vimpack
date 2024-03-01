@@ -98,7 +98,7 @@ for my $pack (@pack)
 
                               my $b = &basename ($p);
  
-                              (($p =~ m/(?:\.(?:o|lst|list|mod|ok|swp|optrpt)|~)$/io) || ($b =~ m/^i\..*\.L$/o) || ($b eq 'xref.db')) 
+                              (($p =~ m/(?:\.(?:o|lst|list|smod|mod|ok|swp|optrpt)|~)$/io) || ($b =~ m/^i\..*\.L$/o) || ($b eq 'xref.db')) 
                                 && return;
                               
                               my $q = "$local/$p";

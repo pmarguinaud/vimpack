@@ -8,6 +8,9 @@ use File::Path;
 use File::Basename;
 use Data::Dumper;
 use Getopt::Long;
+use FindBin qw ($Bin);
+use lib "$Bin/lib";
+use bt;
 
 sub runCommand
 {
@@ -17,7 +20,7 @@ sub runCommand
   print "@cmd\n" if ($args{verbose});
 
   system (@cmd) 
-    or die ("Command `@cmd' failed\n");
+    and die ("Command `@cmd' failed\n");
 }
 
 sub davaiRunCommand
@@ -206,6 +209,7 @@ if ($opts{help})
     exit (0);
   }
 
+die unless ($opts{version});
 die unless (-d '.gitpack');
 
 my $pack = &cwd ();
@@ -229,7 +233,7 @@ if ($opts{reuse})
   }
 else
   {
-    ($nrv, $nrvx) = (&davaiNewXp (branch => &getBranch (), %opts));
+    $nrv = (&davaiNewXp (branch => &getBranch (), %opts));
     
     for (my $i = 0; ; $i++)
       {
