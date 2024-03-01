@@ -110,7 +110,7 @@ sub diff
           $dx = $sdx; $dx = $dx + 0.;
   
           push @{$x[-1]},
-            sprintf (" | %20s | %17.9e  |  %17.9e  |  %17s  | \n", $f1, $x1, $x2, $sdx);
+            sprintf (" | %-20s | %17.9e  |  %17.9e  |  %17s  | \n", $f1, $x1, $x2, $sdx);
   
           $diff++ if ($dx);
   
@@ -435,8 +435,9 @@ sub showStatus
 
   if ($pack1)
     {
-      $log = "$pack/diff." . &basename ($pack1) . ".txt";
+      $log = "$pack/diff." . &basename ($mitraillette) . '-' . &basename ($mitraillette1) . ".txt";
       $fhlog = 'FileHandle'->new (">$log");
+      
     }
   
   my $len = 0;
