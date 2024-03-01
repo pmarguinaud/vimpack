@@ -382,35 +382,41 @@ sub showStatus
 
   (my $pack = $args{pack}) or die;
 
-  my ($mitraillette, $pack1) = @args{qw (mitraillette reference)};
+  my ($mitraillette, $reference) = @args{qw (mitraillette reference)};
 
-  if ($pack1 && (! -f "$pack1/.genesis"))
+  my ($pack1, $mitraillette1);
+
+  if ($reference)
     {
-      if (my ($cjob) = <$pack1/*.cjob>)
+      if (-f "$reference/.genesis")
         {
-          my ($text) = &slurp ($cjob);
-          my ($MYOWNBIN) = ($text =~ m/MYOWNBIN=(\S+)/goms);
-          die unless ($MYOWNBIN);
-          die unless (-f $MYOWNBIN);
-         
-          $pack1 = $MYOWNBIN;
-          for (1 .. 2)
-            {
-              $pack1 = &dirname ($pack1);
-            }
+          $pack1 = $reference;
+          ($mitraillette1) = &getLastMitraillette (pack => $reference);
+          $mitraillette1 or die;
         }
       else
         {
-          die;
+          if (my ($cjob) = <$reference/*.cjob>)
+            {
+              $mitraillette1 = $reference;
+              my ($text) = &slurp ($cjob);
+              my ($MYOWNBIN) = ($text =~ m/MYOWNBIN=(\S+)/goms);
+              die unless ($MYOWNBIN);
+              die unless (-f $MYOWNBIN);
+             
+              $pack1 = $MYOWNBIN;
+
+              for (1 .. 2)
+                {
+                  $pack1 = &dirname ($pack1);
+                }
+
+            }
+          else
+            {
+              die;
+            }
         }
-    }
-
-  my ($mitraillette1);
-
-  if ($pack1)
-    {
-      ($mitraillette1) = &getLastMitraillette (pack => $pack1);
-      $mitraillette1 or die;
     }
 
   $mitraillette or die;
