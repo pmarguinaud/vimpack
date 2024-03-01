@@ -438,13 +438,19 @@ sub showStatus
       $log = "$pack/diff." . &basename ($pack1) . ".txt";
       $fhlog = 'FileHandle'->new (">$log");
     }
+  
+  my $len = 0;
+  for my $o (sort <*.o*>)
+    {
+      $len = length ($o) > $len ? length ($o) : $len;
+    }
 
   for my $o (sort <*.o*>)
     {
       my $edit = 0;
 
       my $info = &jobInfo ($o);
-      printf ("| %-100s | %20s", $info->{CNMEXPL}, &colorStatus (&center ($info->{status}, 20)));
+      printf ("| %-${len}s | %20s", $info->{CNMEXPL}, &colorStatus (&center ($info->{status}, 20)));
 
       my $o1;
 
@@ -461,9 +467,7 @@ sub showStatus
 
               my $diff = &node::diff ($o, $o1, $fhlog);
 
-              printf(" | %20s | %s | %s |", &colorStatus (&center ($info1->{status}, 20)), 
-                     (! &statusEquiv ($info->{status}, $info1->{status})) ? 'X' : ' ',
-                     $diff ? 'X' : ' ');
+              printf(" | %4s |", (! &statusEquiv ($info->{status}, $info1->{status})) || $diff ? 'DIFF' : '....');
 
               $edit = $diff || ($info->{status} ne $info1->{status});
 
