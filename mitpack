@@ -338,7 +338,7 @@ sub jobInfo
   my $o = shift;
 
   my $text = &slurp ($o);
-  my ($status) = ($text =~ m/(FAILED|SIGSEGV|CANCELLED|forrtl: severe)/goms);
+  my ($status) = ($text =~ m/(FAILED|SIGSEGV|CANCELLED|forrtl: severe|BAD TERMINATION)/goms);
   my ($CNMEXPL) = ($text =~ m/CNMEXPL=(\w+)/goms);
 
   unless ($status)
@@ -358,12 +358,13 @@ sub colorStatus
 
   my %color = 
   (
-    FAILED           => 'red',
-    COMPLETED        => 'green',
-    'forrtl: severe' => 'red',
-    SIGSEGV          => 'red',
-    UNKNOWN          => 'yellow',
-    CANCELLED        => 'red',
+    FAILED            => 'red',
+    COMPLETED         => 'green',
+    'forrtl: severe'  => 'red',
+    SIGSEGV           => 'red',
+    UNKNOWN           => 'yellow',
+    CANCELLED         => 'red',
+    'BAD TERMINATION' => 'red',
   );
 
   if (my $color = $color{$status})
@@ -438,7 +439,7 @@ sub showStatus
       $fhlog = 'FileHandle'->new (">$log");
     }
 
-  for my $o (<*.o*>)
+  for my $o (sort <*.o*>)
     {
       my $edit = 0;
 
@@ -461,7 +462,7 @@ sub showStatus
               my $diff = &node::diff ($o, $o1, $fhlog);
 
               printf(" | %20s | %s | %s |", &colorStatus (&center ($info1->{status}, 20)), 
-                     $info->{status} ne $info1->{status} ? 'X' : ' ',
+                     (! &statusEquiv ($info->{status}, $info1->{status})) ? 'X' : ' ',
                      $diff ? 'X' : ' ');
 
               $edit = $diff || ($info->{status} ne $info1->{status});
@@ -480,6 +481,12 @@ sub showStatus
 
     }
 
+}
+
+sub statusEquiv
+{
+  my ($status1, $status2) = @_;
+  return (($status1 eq 'COMPLETED') == ($status2 eq 'COMPLETED'));
 }
 
 sub getLastMitraillette
