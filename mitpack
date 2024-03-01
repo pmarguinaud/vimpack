@@ -367,7 +367,7 @@ sub colorStatus
     'BAD TERMINATION' => 'red',
   );
 
-  if (my $color = $color{$status})
+  if ((-t STDOUT) && (my $color = $color{$status}))
     {
       return &colored ([$color], $text);
     }
@@ -445,6 +445,9 @@ sub showStatus
       $len = length ($o) > $len ? length ($o) : $len;
     }
 
+  printf ("> %s\n", $mitraillette);
+  printf ("< %s\n", $mitraillette1) if ($mitraillette1);
+
   for my $o (sort <*.o*>)
     {
       my $edit = 0;
@@ -467,7 +470,7 @@ sub showStatus
 
               my $diff = &node::diff ($o, $o1, $fhlog);
 
-              printf(" | %4s |", (! &statusEquiv ($info->{status}, $info1->{status})) || $diff ? 'DIFF' : '....');
+              printf(" | %s", (! &statusEquiv ($info->{status}, $info1->{status})) || $diff ? 'DIFF' : '');
 
               $edit = $diff || ($info->{status} ne $info1->{status});
 
@@ -520,6 +523,11 @@ sub help
   print "Usage: " . &basename ($0) . "\n" 
       . " Options:\n" . join ('', map { "   --$_\n" } @opts_f, @opts_s);
 }
+
+if (-f '.mitpack.conf')
+  {
+    push @ARGV, @{ do './.mitpack.conf' };
+  }
 
 &GetOptions
 (
