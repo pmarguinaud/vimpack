@@ -140,9 +140,23 @@ use File::Path;
 use File::Basename;
 use Data::Dumper;
 use Getopt::Long;
+use Term::ANSIColor;
 use FindBin qw ($Bin);
 use lib "$Bin/lib";
 use bt;
+
+
+sub center
+{
+  my ($s, $n) = @_; 
+  my $i = 0;
+  while (length ($s) < $n) 
+    {   
+      $s = $i % 2 ? " $s" : "$s ";
+      $i++;
+    }   
+  return $s; 
+}
 
 my $MITRAILLE = "$ENV{HOME}/mitraille";
 
@@ -337,6 +351,31 @@ sub jobInfo
   return {status => $status, CNMEXPL => $CNMEXPL};
 }
 
+sub colorStatus
+{
+  my $text = shift;
+  (my $status = $text) =~ s/(?:^\s*|\s*$)//go;
+
+  my %color = 
+  (
+    FAILED           => 'red',
+    COMPLETED        => 'green',
+    'forrtl: severe' => 'red',
+    SIGSEGV          => 'red',
+    UNKNOWN          => 'yellow',
+    CANCELLED        => 'red',
+  );
+
+  if (my $color = $color{$status})
+    {
+      return &colored ([$color], $text);
+    }
+  else
+    {
+      return $text;
+    }
+}
+
 sub showStatus
 {
   my %args = @_;
@@ -345,7 +384,7 @@ sub showStatus
 
   my ($mitraillette, $pack1) = @args{qw (mitraillette reference)};
 
-  unless (-f "$pack1/.genesis")
+  if ($pack1 && (! -f "$pack1/.genesis"))
     {
       if (my ($cjob) = <$pack1/*.cjob>)
         {
@@ -385,18 +424,27 @@ sub showStatus
     ($_, $o) 
   } <$mitraillette1/*.o*> : ();
 
-  my $log = "$pack/diff." . &basename ($pack1) . ".txt";
-  my $fhlog = 'FileHandle'->new (">$log");
+  my ($log, $fhlog);
+
+  if ($pack1)
+    {
+      $log = "$pack/diff." . &basename ($pack1) . ".txt";
+      $fhlog = 'FileHandle'->new (">$log");
+    }
 
   for my $o (<*.o*>)
     {
+      my $edit = 0;
+
       my $info = &jobInfo ($o);
-      printf ("| %-100s | %20s", $info->{CNMEXPL}, $info->{status});
+      printf ("| %-100s | %20s", $info->{CNMEXPL}, &colorStatus (&center ($info->{status}, 20)));
+
+      my $o1;
 
       if ($mitraillette1)
         {
           (my $O = $o) =~ s/\.o\d+$//o;
-          my $o1 = $o1{$O};
+          $o1 = $o1{$O};
 
           if ($o1)
             {
@@ -406,15 +454,24 @@ sub showStatus
 
               my $diff = &node::diff ($o, $o1, $fhlog);
 
-              printf(" | %20s | %s | %s |", $info1->{status}, 
+              printf(" | %20s | %s | %s |", &colorStatus (&center ($info1->{status}, 20)), 
                      $info->{status} ne $info1->{status} ? 'X' : ' ',
                      $diff ? 'X' : ' ');
+
+              $edit = $diff || ($info->{status} ne $info1->{status});
 
               $fhlog->print ("\n\n");
             }
         }
 
       printf ("\n");
+
+      if ($args{'status-edit-diff'} && $o1 && $edit)
+        {
+          system ('vim', '-d', $o, $o1);
+        }
+
+
     }
 
 }
@@ -438,7 +495,7 @@ sub getLastMitraillette
 }
 
 my %opts = (version => &getVersion ());
-my @opts_f = qw (verbose help reuse dryrun status);
+my @opts_f = qw (verbose help reuse dryrun status status-edit-diff);
 my @opts_s = qw (version reference);
 
 sub help
