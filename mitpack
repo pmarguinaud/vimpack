@@ -446,8 +446,12 @@ sub showStatus
       $len = length ($o) > $len ? length ($o) : $len;
     }
 
-  printf ("> %s\n", $mitraillette);
-  printf ("< %s\n", $mitraillette1) if ($mitraillette1);
+  printf ("RUN = %s\n", $mitraillette);
+  printf ("REF = %s\n", $mitraillette1) if ($mitraillette1);
+
+  printf ("| %-${len}s | %20s", '',  &center ('RUN', 20));
+  printf (" | %20s | %s", &center ('REF', 20), '') if ($mitraillette1);
+  print "\n";
 
   for my $o (sort <*.o*>)
     {
@@ -471,7 +475,7 @@ sub showStatus
 
               my $diff = &node::diff ($o, $o1, $fhlog);
 
-              printf(" | %s", (! &statusEquiv ($info->{status}, $info1->{status})) || $diff ? 'DIFF' : '');
+              printf (" | %20s | %s", &colorStatus (&center ($info1->{status}, 20)), (! &statusEquiv ($info->{status}, $info1->{status})) || $diff ? 'DIFF' : '');
 
               $edit = $diff || ($info->{status} ne $info1->{status});
 
