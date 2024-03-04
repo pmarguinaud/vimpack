@@ -320,9 +320,10 @@ sub runMitrailletteTestCase
 
   chdir ($mitraillette);
 
+  &mkpath ('old');
+
   if (my @o = <*.o*>)
     {
-      &mkpath ('old');
       rename ($_, "old/$_") for (@o);
     }
 

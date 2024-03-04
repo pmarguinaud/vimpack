@@ -70,10 +70,17 @@ my %pack2davai =
       
 sub getGenesis
 {
-  die unless (-f '.genesis');
-  chomp (my $genesis = do { my $fh = 'FileHandle'->new ("<.genesis"); local $/ =  undef; <$fh> });
+  chomp (my $genesis = &slurp ('.genesis'));
   my @genesis = split (m/\s+/o, $genesis);
   return @genesis;
+}
+
+sub slurp
+{
+  my $f = shift;
+  die unless (-f $f);
+  my $text = do { my $fh = 'FileHandle'->new ("<$f"); local $/ =  undef; <$fh> };
+  return $text;
 }
 
 sub compileBinaries
@@ -91,6 +98,10 @@ sub compileBinaries
   return;
 
 COMPILE:
+
+  my $cwd = &cwd ();
+
+  chdir ($pack);
 
   my @genesis = &getGenesis ();
 
@@ -115,11 +126,13 @@ COMPILE:
 
   &runCommand (command => [@genesis], %args);
 
-  die unless (-f 'ics_masterodb_etc');
+  (my $ics = &slurp ('ics_masterodb_etc')) =~ s/GMK_THREADS=1\b/GMK_THREADS=16/goms;
+  'FileHandle'->new ('>ics_masterodb_etc')->print ($ics);
+  chmod (0755, $ics);
 
   &runCommand (command => ['./ics_masterodb_etc'], %args);
   
-
+  chdir ($cwd);
 }
 
 sub setBinaryLinks
@@ -137,9 +150,7 @@ sub setBinaryLinks
   
   my $conf = "DAVAI-tests/conf/$host.ini";
   
-  die unless (-f $conf);
-  
-  $conf = do { my $fh = 'FileHandle'->new ("<$conf"); local $/ = undef; <$fh> };
+  $conf = &slurp ($conf);
   
   my ($compilation_flavour) = ($conf =~ m/compilation_flavour\s*=\s*(\S+)/goms);
   my ($executables_fmt) = ($conf =~ m/executables_fmt\s*=\s*(\S+)/goms);
