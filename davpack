@@ -78,8 +78,10 @@ sub getGenesis
 sub slurp
 {
   my $f = shift;
-  die unless (-f $f);
-  my $text = do { my $fh = 'FileHandle'->new ("<$f"); local $/ =  undef; <$fh> };
+  my $fh = 'FileHandle'->new ("<$f"); 
+  die ("Could not open `$f' for reading\n") unless ($fh);
+  local $/ =  undef; 
+  my $text = <$fh>;
   return $text;
 }
 
@@ -135,10 +137,11 @@ COMPILE:
   chdir ($cwd);
 }
 
-sub setBinaryLinks
+sub getConf
 {
   my %args = @_;
-  my ($pack, $nrv) = @args{qw (pack nrv)};
+
+  my ($nrv) = @args{qw (nrv)};
 
   my ($id) = ($nrv =~ m,/(dv-\d+-\w+\@\w+)/,o);
   
@@ -148,32 +151,71 @@ sub setBinaryLinks
   
   die unless ($host && $user);
   
-  my $conf = "DAVAI-tests/conf/$host.ini";
-  
-  $conf = &slurp ($conf);
-  
+  my $conf = &slurp ("$nrv/DAVAI-tests/conf/$host.ini");
   my ($compilation_flavour) = ($conf =~ m/compilation_flavour\s*=\s*(\S+)/goms);
+  my ($compilation_flavours) = ($conf =~ m/compilation_flavours\s*=\s*list\(\s*(.*?)\s*\)/goms);
+  $compilation_flavours = [split (m/\s*,\s*/o, $compilation_flavours)];
+
   my ($executables_fmt) = ($conf =~ m/executables_fmt\s*=\s*(\S+)/goms);
-  
   die unless ($compilation_flavour && $executables_fmt);
   
+  $conf = 
+    {
+      host => $host,
+      user => $user,
+      id   => $id,
+      compilation_flavour  => $compilation_flavour,
+      compilation_flavours => $compilation_flavours,
+      executables_fmt      => $executables_fmt,
+    };
+
+  return $conf;
+}
+
+sub getPacks
+{
+  my %args = @_;
+  my ($pack, $nrv) = @args{qw (pack nrv)};
+
+  my $conf = &getConf (nrv => $nrv);
+
+  for my $flavour (@{ $conf->{compilation_flavours} })
+    {
+      $pack =~ s/$flavour$//;
+    }
+
+  my @pack;
+
+  for my $flavour (@{ $conf->{compilation_flavours} })
+    {
+      push @pack, "$pack$flavour" if (-d "$pack$flavour");
+    }
+
+  return @pack;
+}
+
+sub setBinaryLinks
+{
+  my %args = @_;
+  my ($pack, $nrv) = @args{qw (pack nrv)};
+
+  my $conf = &getConf (nrv => $nrv);
+
+  my ($compilation_flavour) = grep ({ $pack =~ m/$_$/ } @{ $conf->{compilation_flavours} });
   $compilation_flavour = lc ($compilation_flavour);
   
-  for my $ext ('', 's')
-    {
-      next unless (-d "$pack$ext");
+  my $pack2bin = "/scratch/mtool/$conf->{user}/cache/vortex/davai/nrv/$conf->{id}/pack2bin.$compilation_flavour";
   
-      my $pack2bin = "/scratch/mtool/$user/cache/vortex/davai/nrv/$id/pack2bin.$compilation_flavour$ext";
-      
-      &mkpath ($pack2bin);
+  &mkpath ($pack2bin);
 
-      for my $bin (sort keys (%pack2davai))
-        {
-          die ("Missing `$pack$ext/bin/$bin'") unless (-f "$pack$ext/bin/$bin");
-          symlink ("$pack$ext/bin/$bin", "$pack2bin/$pack2davai{$bin}.$executables_fmt");
-        }
-  
+  for my $bin (sort keys (%pack2davai))
+    {
+      die ("Missing `$pack/bin/$bin'") unless (-f "$pack/bin/$bin");
+      my ($o, $t) = ("$pack/bin/$bin", "$pack2bin/$pack2davai{$bin}.$conf->{executables_fmt}");
+      symlink ($o, $t) or die ("Cannot symlink $o -> $t");
+      print "symlink $o -> $t\n" if ($args{verbose});
     }
+  
 }
 
 sub getCycle
@@ -196,6 +238,21 @@ sub getVersion
   my $cycle = &getCycle ();
   
   return $cycle2version{$cycle};
+}
+
+sub checkGmkpack
+{
+  my @PATH = split (m/:/o, $ENV{PATH});
+  for my $PATH (@PATH)
+    {
+      my $gmkpack = "$PATH/gmkpack";
+      goto FOUND if (-f $gmkpack && -x $gmkpack);
+    }
+
+  die "gmkpack was not found in $ENV{PATH}";
+  
+FOUND:
+
 }
 
 my %opts = (version => &getVersion ());
@@ -222,18 +279,13 @@ if ($opts{help})
 
 die unless ($opts{version});
 die unless (-d '.gitpack');
+&checkGmkpack ();
 
 my $pack = &cwd ();
 
-for my $ext ('', 's')
-  {
-    &compileBinaries (pack => "$pack$ext", %opts) if (-d "$pack$ext");
-  }
-
 my ($nrv, $nrvx);
 
-
-if ($opts{reuse})
+if ($opts{reuse} && <nrv.*>)
   {
     for (my $i = 0; ; $i++)
       {
@@ -257,13 +309,24 @@ else
       }
   }
 
+my @pack = &getPacks (pack => &cwd (), nrv => $nrv);
+
+for my $pack (@pack)
+  {
+    &compileBinaries (pack => $pack, %opts);
+  }
+
+
 die unless ($nrv && $nrvx);
 
 chdir ($nrvx);
 
 if (! $opts{reuse})
   {
-    &setBinaryLinks (pack => $pack, nrv => $nrv, %opts);
+    for my $pack (@pack)
+      {
+        &setBinaryLinks (pack => $pack, nrv => $nrv, %opts);
+      }
     &davaiRunCommand (command => ['davai-ciboulai_init'], %opts);
   }
 
