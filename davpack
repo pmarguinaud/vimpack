@@ -10,6 +10,7 @@ use File::Basename;
 use Data::Dumper;
 use Getopt::Long;
 use JSON;
+use Storable;
 use POSIX qw (strftime);
 use File::stat;
 use Term::ANSIColor;
@@ -316,30 +317,46 @@ sub showStatus
 
   use List::Util qw (uniq max);
   
-  my @suff = qw (.consistency.json .continuity.json .itself.json);
+  my @suff = qw (.itself.json .consistency.json .continuity.json);
   my @task = sort &uniq (map { &basename ($_, @suff) } <$dir/*.json>);
 
   my $len = &max (map { length ($_) } @task);
-
   
+
+  printf (" | %-${len}s ", "");
+  for my $suff (@suff)
+    {
+      (my $s = $suff) =~ s/(?:^\.|\.json$)//go;
+      printf (" | %20s ", &center ($s, 20));
+    }
+  printf (" | \n");
+
   for my $task (@task)
     {
-      printf (" | %-${len}s |", $task);
+      printf (" | %-${len}s ", $task);
       for my $suff (@suff)
         {
-          next unless (-f (my $f = "$dir/$task$suff"));
+          my $f = "$dir/$task$suff";
+          unless (-f $f)
+            {
+              printf (" | %20s ", "");
+              next;
+            }
           my $x = &JSON::decode_json (&slurp ($f));
 #         print &Dumper ($x);
           if (my $status = $x->{comparisonStatus}{symbol} || $x->{Status}{symbol})
             {
               my $st = stat ($f);
               my $dt = strftime ('%Y-%m-%d %H:%M:%S', localtime ($st->mtime ()));
-              printf (" %s | ", $dt);
-              printf (" %s ", &colorStatus (&center ($status, 20)));
-              last;
+#             printf (" %s | ", $dt);
+              printf (" | %20s ", &colorStatus (&center ($status, 20)));
+            }
+          else
+            {
+              printf (" | %20s ", "");
             }
         }
-      printf ("\n");
+      printf (" | \n");
     }
 
 # {Listings}{"Compare listings at uri(s)"}{ref}
