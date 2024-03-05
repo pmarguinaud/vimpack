@@ -2,12 +2,18 @@
 #
 
 use strict;
+use local::lib;
 use Cwd;
 use FileHandle;
 use File::Path;
 use File::Basename;
 use Data::Dumper;
 use Getopt::Long;
+use JSON;
+use POSIX qw (strftime);
+use File::stat;
+use Term::ANSIColor;
+
 use FindBin qw ($Bin);
 use lib "$Bin/lib";
 use bt;
@@ -194,6 +200,14 @@ sub getPacks
   return @pack;
 }
 
+sub getMtoolRoot
+{
+  my %args = @_;
+  my $conf = $args{conf};
+
+  return "/scratch/mtool/$conf->{user}/cache/vortex/davai/nrv/$conf->{id}";
+}
+
 sub setBinaryLinks
 {
   my %args = @_;
@@ -204,7 +218,7 @@ sub setBinaryLinks
   my ($compilation_flavour) = grep ({ $pack =~ m/$_$/ } @{ $conf->{compilation_flavours} });
   $compilation_flavour = lc ($compilation_flavour);
   
-  my $pack2bin = "/scratch/mtool/$conf->{user}/cache/vortex/davai/nrv/$conf->{id}/pack2bin.$compilation_flavour";
+  my $pack2bin = &getMtoolRoot (conf => $conf) . "/pack2bin.$compilation_flavour";
   
   &mkpath ($pack2bin);
 
@@ -255,8 +269,86 @@ FOUND:
 
 }
 
+sub center
+{
+  my ($s, $n) = @_; 
+  my $i = 0;
+  while (length ($s) < $n) 
+    {   
+      $s = $i % 2 ? " $s" : "$s ";
+      $i++;
+    }   
+  return $s; 
+}
+
+sub colorStatus
+{
+  my $text = shift;
+  (my $status = $text) =~ s/(?:^\s*|\s*$)//go;
+
+  my %color = 
+  (
+    KO                => 'red',
+    OK                => 'green',
+    '(C...)'          => 'yellow',
+    '(I...)'          => 'yellow',
+    'X:R?'            => 'yellow',
+  );
+
+  if ((-t STDOUT) && (my $color = $color{$status}))
+    {
+      return &colored ([$color], $text);
+    }
+  else
+    {
+      return $text;
+    }
+}
+
+sub showStatus
+{
+  my %args = @_;
+  my $nrv = $args{nrv};
+
+  my $conf = &getConf (nrv => $nrv);
+  
+  my $dir = &getMtoolRoot (conf => $conf) . '/summaries_stack';
+
+  use List::Util qw (uniq max);
+  
+  my @suff = qw (.consistency.json .continuity.json .itself.json);
+  my @task = sort &uniq (map { &basename ($_, @suff) } <$dir/*.json>);
+
+  my $len = &max (map { length ($_) } @task);
+
+  
+  for my $task (@task)
+    {
+      printf (" | %-${len}s |", $task);
+      for my $suff (@suff)
+        {
+          next unless (-f (my $f = "$dir/$task$suff"));
+          my $x = &JSON::decode_json (&slurp ($f));
+#         print &Dumper ($x);
+          if (my $status = $x->{comparisonStatus}{symbol} || $x->{Status}{symbol})
+            {
+              my $st = stat ($f);
+              my $dt = strftime ('%Y-%m-%d %H:%M:%S', localtime ($st->mtime ()));
+              printf (" %s | ", $dt);
+              printf (" %s ", &colorStatus (&center ($status, 20)));
+              last;
+            }
+        }
+      printf ("\n");
+    }
+
+# {Listings}{"Compare listings at uri(s)"}{ref}
+# {Listings}{"Compare listings at uri(s)"}{test}
+
+}
+
 my %opts = (version => &getVersion ());
-my @opts_f = qw (verbose dryrun help reuse);
+my @opts_f = qw (verbose dryrun help reuse status);
 my @opts_s = qw (version);
 
 sub help
@@ -270,6 +362,8 @@ sub help
   (map { ($_, \$opts{$_}) } @opts_f),
   (map { ("$_=s", \$opts{$_}) } @opts_s),
 );
+
+$opts{reuse} ||= $opts{status};
 
 if ($opts{help})
   {
@@ -330,8 +424,14 @@ if (! $opts{reuse})
     &davaiRunCommand (command => ['davai-ciboulai_init'], %opts);
   }
 
-&davaiRunCommand (command => ['davai-run_tests'], %opts) unless ($opts{'dryrun'});
-
+if ($opts{status})
+  {
+    &showStatus (%opts, nrv => $nrv);
+  }
+elsif (! $opts{'dryrun'})
+  {
+    &davaiRunCommand (command => ['davai-run_tests'], %opts);
+  }
 
 
 
