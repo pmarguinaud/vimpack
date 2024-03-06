@@ -92,6 +92,18 @@ sub slurp
   return $text;
 }
 
+sub getCurrentCommit
+{
+  my %args = @_;
+  my $pack = $args{pack};
+
+  return '' unless (-d '.gitpack');
+
+  chomp (my $commit = `gitpack rev-parse HEAD`);
+
+  return $commit;
+}
+
 sub compileBinaries
 {
   my %args = @_;
@@ -227,6 +239,7 @@ sub setBinaryLinks
     {
       die ("Missing `$pack/bin/$bin'") unless (-f "$pack/bin/$bin");
       my ($o, $t) = ("$pack/bin/$bin", "$pack2bin/$pack2davai{$bin}.$conf->{executables_fmt}");
+      next if (-l $t);
       symlink ($o, $t) or die ("Cannot symlink $o -> $t");
       print "symlink $o -> $t\n" if ($args{verbose});
     }
@@ -407,7 +420,7 @@ if ($opts{reuse} && <nrv.*>)
   }
 else
   {
-    $nrv = (&davaiNewXp (branch => &getBranch (), %opts));
+    $nrv = &davaiNewXp (branch => &getBranch (), %opts);
     
     for (my $i = 0; ; $i++)
       {
@@ -420,24 +433,42 @@ else
       }
   }
 
+die unless ($nrv && $nrvx);
+
 my @pack = &getPacks (pack => &cwd (), nrv => $nrv);
 
-for my $pack (@pack)
+unless ($opts{dryrun} || $opts{status})
   {
-    &compileBinaries (pack => $pack, %opts);
+    # Check all pack are at the same commit
+
+    my %commit;
+    for my $pack (@pack)
+      {
+        $commit{$pack} = &getCurrentCommit (pack => $pack);
+      }
+
+    if (grep { $commit{$pack} ne $commit{$_} } @pack)
+      {
+         for my $pack (@pack)
+           {
+             printf (" %s %s\n", $commit{$pack}, $pack);
+           }
+         die ("Commit mismatch\n");
+      }
+
+    # Create davai executables if necessary
+
+    for my $pack (@pack)
+      {
+        &compileBinaries (pack => $pack, %opts);
+        &setBinaryLinks (pack => $pack, nrv => $nrv, %opts);
+      }
   }
-
-
-die unless ($nrv && $nrvx);
 
 chdir ($nrvx);
 
 if (! $opts{reuse})
   {
-    for my $pack (@pack)
-      {
-        &setBinaryLinks (pack => $pack, nrv => $nrv, %opts);
-      }
     &davaiRunCommand (command => ['davai-ciboulai_init'], %opts);
   }
 

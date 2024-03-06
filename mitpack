@@ -239,8 +239,10 @@ sub generateProFile
 
   for (@list)   
     {
-      s/\s+$//o;
+      s/(?:^\s*|\s*)$//go;
     }
+
+  @list = grep { (! m/^\s*$/o) && (! m/^#/o) } @list;
 
   my $pro_file = "$MITRAILLE/PRO_FILE.$p";
 
