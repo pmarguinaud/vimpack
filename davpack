@@ -46,6 +46,8 @@ Once the DAVAI tasks have ended, davpack will provide a short report for each of
 
 =head1 OPTIONS
 
+=over 4
+
 =item --dryrun
 
 Do everything, but do not start DAVAI test suite.

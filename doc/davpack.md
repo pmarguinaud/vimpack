@@ -68,11 +68,3 @@ This file will be used by davpack to enable DAVAI environment before issuing DAV
 # AUTHOR
 
 pmarguinaud@hotmail.com
-
-# POD ERRORS
-
-Hey! **The above document had some coding errors, which are explained below:**
-
-- Around line 49:
-
-    '=item' outside of any '=over'
