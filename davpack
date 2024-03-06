@@ -1,5 +1,103 @@
 #!/usr/bin/perl -w
-#
+
+=head1 NAME
+
+davpack
+
+=head1 SYNOPSIS
+
+  $ cd pack
+  $ cd 49t1_tot2nvmassweno.03.IMPIIFC2018.x
+  $ davpack                                   # Create & run new test case
+  $ davpack --reuse                           # Rerun last test case
+  $ davpack --status                          # See status of last test tasks
+
+=head1 DESCRIPTION
+
+Run DAVAI test suite from within a pack. 
+
+This script will :
+
+=over 4
+
+=item 
+
+Create the DAVAI test case and initialize the CIBOULAI interface.
+
+=item 
+
+Compile the executables required for DAVAI.
+
+=item 
+
+Check for other packs (single precision, bound checking) if enabled in the DAVAI configuration
+
+=item 
+
+Create the required symbolic links so that DAVAI can use the executables
+
+=item 
+
+Start the DAVAI test suite
+
+=back
+
+Once the DAVAI tasks have ended, davpack will provide a short report for each of the tasks.
+
+=head1 OPTIONS
+
+=item --dryrun
+
+Do everything, but do not start DAVAI test suite.
+
+=item --reuse
+
+Reuse last DAVAI test case.
+
+=item --status
+
+Show status of DAVAI tasks.
+
+=item --version
+
+Version of DAVAI tests. We try to guess the version from the cycle, but you may have 
+to provide it yourself.
+
+=back
+
+=head1 CONFIGURATION
+
+You need to provide a ~/.davai_profile. In this file, please provide the shell commands
+which will enable DAVAI; for instance, on belenos/taranis : 
+
+  module use ~mary/public/modulefiles 
+  module load git/2.27.0
+  module load python/3.7.6 
+  module load davai
+
+This file will be used by davpack to enable DAVAI environment before issuing DAVAI commands.
+
+=head1 REQUIREMENTS
+
+=over 4
+
+=item davai
+
+=item gmkpack
+
+=item gitpack
+
+=back
+
+=head1 SEE ALSO
+
+C<gmkpack>, C<DAVAI>
+
+=head1 AUTHOR
+
+pmarguinaud@hotmail.com
+
+=cut
 
 use strict;
 use local::lib;
