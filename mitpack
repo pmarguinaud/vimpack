@@ -421,6 +421,9 @@ sub jobInfo
 
   my $text = &slurp ($o);
   my ($status) = ($text =~ m/(FAILED|SIGSEGV|CANCELLED|forrtl: severe|BAD TERMINATION)/goms);
+
+  $status =~ s/^forrtl:.*SIGSEGV/SIGSEGV/o if ($status);
+
   my ($CNMEXPL) = ($text =~ m/CNMEXPL=(\w+)/goms);
 
   unless ($status)
@@ -609,7 +612,7 @@ sub help
 
 if (-f '.mitpack.conf')
   {
-    push @ARGV, @{ do './.mitpack.conf' };
+    unshift (@ARGV, @{ do './.mitpack.conf' });
   }
 
 &GetOptions
