@@ -93,7 +93,7 @@ sub wanted
 
   return unless (-f (my $f = $File::Find::name));
   return if ($f =~ m,/(?:\.intfb|\.include)/,o);
-  return if ($f =~ m,\.(?:o|optrpt|lst|list|smod|mod|ok|lst.db)$,o);
+  return if ($f =~ m,\.(?:o|optrpt|lst|list|smod|mod|ok|lst.db|F90\.xml)$,o);
   return if ($f =~ m,\.(?:swp)$,o);
   return if ($f =~ m,\.fypp/,o);
   $f =~ s,^\./,,o;
