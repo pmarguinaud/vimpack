@@ -142,7 +142,22 @@ sub davaiRunCommand
 
   my $out = `set -e ; source $profile > /dev/null 2>&1; @cmd`;
   my $c = $?;
-  $c && die ("Davai command `@_' failed\n");
+  $c && die ("Davai command `@cmd' failed\n");
+
+  return $out;
+}
+
+sub gitpackRunCommand
+{
+  my %args = @_;
+
+  my @cmd = @{ ${args}{command} };
+
+  print "@cmd\n" if ($args{verbose});
+
+  my $out = `@cmd`;
+  my $c = $?;
+  $c && die ("Gitpack command `@cmd' failed\n");
 
   return $out;
 }
@@ -150,15 +165,27 @@ sub davaiRunCommand
 sub davaiNewXp
 {
   my %args = @_;
-  my $out = &davaiRunCommand (command => [qw (davai-new_xp -v), $args{version}, $args{branch}], %args);
+
+  my $branch = &getBranch (%args);
+  my $commit = &getCommit (%args);
+
+  my $out = &davaiRunCommand (command => ['davai-new_xp', -v => $args{version},  
+                                          -c => "$branch:$commit", $branch], 
+                              %args);
   my ($nrv) = ($out =~ m/=> (\S+)/goms);
   return $nrv;
 }
 
 sub getBranch
 {
-  chomp (my $branch = `gitpack rev-parse --abbrev-ref HEAD`);
+  chomp (my $branch = &gitpackRunCommand (@_, command => [qw (gitpack rev-parse --abbrev-ref HEAD)]));
   return $branch;
+}
+
+sub getCommit
+{
+  chomp (my $commit = &gitpackRunCommand (@_, command => [qw (gitpack rev-parse HEAD)]));
+  return $commit;
 }
 
 my %pack2davai =
@@ -520,7 +547,7 @@ if ($opts{reuse} && <nrv.*>)
   }
 else
   {
-    $nrv = &davaiNewXp (branch => &getBranch (), %opts);
+    $nrv = &davaiNewXp (%opts);
     
     for (my $i = 0; ; $i++)
       {
