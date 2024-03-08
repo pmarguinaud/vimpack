@@ -272,6 +272,16 @@ sub slurp
   return $text;
 }
 
+sub swapLink
+{
+  my $f = shift;
+  return unless (-l $f);
+  my $g = readlink ($f);
+  unlink ($f);
+  rename ($g, $f);
+  symlink ($f, $g);
+}
+
 sub getGenesis
 {
   die unless (-f '.genesis');
@@ -420,7 +430,7 @@ sub jobInfo
   my $o = shift;
 
   my $text = &slurp ($o);
-  my ($status) = ($text =~ m/(FAILED|SIGSEGV|CANCELLED|forrtl: severe|BAD TERMINATION)/goms);
+  my ($status) = ($text =~ m/(ABOR1|FAILED|SIGSEGV|CANCELLED|forrtl: severe|BAD TERMINATION)/goms);
 
   $status =~ s/^forrtl:.*SIGSEGV/SIGSEGV/o if ($status);
 
@@ -444,6 +454,7 @@ sub colorStatus
   my %color = 
   (
     FAILED            => 'red',
+    ABOR1             => 'red',
     COMPLETED         => 'green',
     'forrtl: severe'  => 'red',
     SIGSEGV           => 'red',
@@ -592,16 +603,15 @@ sub getLastMitraillette
 
   (my $pack = $args{pack}) or die;
 
-  my ($mitraillette, $mitraillettex);
+  my $mitraillette;
 
   for (my $i = 0; ; $i++)
     {
-      last unless (-l "mitraillette.$i");
-      $mitraillettex = "$pack/mitraillette.$i";
-      $mitraillette = readlink ($mitraillettex);
+      last unless (-d "mitraillette.$i/");
+      $mitraillette = "$pack/mitraillette.$i";
     }
 
-  return ($mitraillette, $mitraillettex);
+  return $mitraillette;
 }
 
 my %opts = (version => &getVersion ());
@@ -636,13 +646,13 @@ die unless (-f '.genesis');
 
 my $pack = &cwd ();
 
-my ($mitraillette, $mitraillettex);
+my $mitraillette;
 
 $opts{reuse} ||= $opts{status};
 
 if ($opts{reuse})
   {
-    ($mitraillette, $mitraillettex) = &getLastMitraillette (pack => $pack);
+    $mitraillette = &getLastMitraillette (pack => $pack);
   }
 else
   {
@@ -652,8 +662,9 @@ else
       {
         if (! -d "$pack/mitraillette.$i")
           {
-            symlink ($mitraillette, "$pack/mitraillette.$i");
-            $mitraillettex = "$pack/mitraillette.$i";
+            my ($o, $t) = ($mitraillette, "$pack/mitraillette.$i");
+            symlink ($o, $t);
+            &swapLink ($t);
             last;
           }
       }
