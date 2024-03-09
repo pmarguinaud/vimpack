@@ -20,6 +20,8 @@ mitpack
 
 Run MITRAILLETTE test suite from within a pack.
 
+=head1 DETAILS
+
 This script will : 
 
 =over 4

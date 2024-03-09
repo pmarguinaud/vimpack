@@ -15,6 +15,8 @@ davpack
 
 Run DAVAI test suite from within a pack. 
 
+# DETAILS
+
 This script will :
 
 - Create the DAVAI test case and initialize the CIBOULAI interface.

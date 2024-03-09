@@ -17,6 +17,8 @@ davpack
 
 Run DAVAI test suite from within a pack. 
 
+=head1 DETAILS
+
 This script will :
 
 =over 4

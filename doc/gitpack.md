@@ -22,6 +22,8 @@ gitpack
 `gitpack` is a script wrapping `git`. All git commands are available from
 within a pack.
 
+# PRINCIPLES
+
 `gitpack` will synchronize files between the git repository and the gmkpack
 local view : all changes made to the files located in the local view are copied
 back to the git repository; in return, all git commands such as checkout, merge, 

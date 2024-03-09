@@ -26,6 +26,8 @@ gitpack
 C<gitpack> is a script wrapping C<git>. All git commands are available from
 within a pack.
 
+=head1 PRINCIPLES
+
 C<gitpack> will synchronize files between the git repository and the gmkpack
 local view : all changes made to the files located in the local view are copied
 back to the git repository; in return, all git commands such as checkout, merge, 

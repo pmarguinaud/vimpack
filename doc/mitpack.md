@@ -17,6 +17,8 @@ mitpack
 
 Run MITRAILLETTE test suite from within a pack.
 
+# DETAILS
+
 This script will : 
 
 - Create the MITRAILLETTE test case; create a PRO\_FILE, run mitraille.x, and remove dependencies
