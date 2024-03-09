@@ -457,6 +457,49 @@ sub colorStatus
     }
 }
 
+sub cancelDavai
+{
+  my %args = @_;
+  my $nrv = $args{nrv};
+
+  my $conf = &getConf (nrv => $nrv);
+  
+  my $dir = &getMtoolRoot (conf => $conf) . '/summaries_stack';
+
+  my @task = sort &uniq (map { &basename ($_, qw (.itself.json)) } <$dir/*.itself.json>);
+
+  for my $task (@task)
+    {
+      my $f = "$dir/$task.itself.json";
+      my $x = &JSON::decode_json (&slurp ($f));
+
+      my $MTOOL_STEP_DEPOT = $x->{Context}{MTOOL_STEP_DEPOT};
+      my @step = <$MTOOL_STEP_DEPOT/step.*.out>;
+      
+      my %id;
+      for my $step (@step)
+        {
+          my $text = &slurp ($step);
+
+          if (my ($id) = ($text =~ m/SLURM_JOBID="(\d+)"/goms))
+            {
+              $id{$id} = 1;
+            }
+
+          if (my ($id) = ($text =~ m/Submitted batch job (\d+)/goms))
+            {
+              $id{$id} = 1;
+            }
+        }
+
+      for my $id (sort keys (%id))
+        {
+          &runCommand (command => ['scancel', $id], %args);
+        }
+    }
+  
+}
+
 sub showStatus
 {
   my %args = @_;
@@ -516,7 +559,7 @@ sub showStatus
 }
 
 my %opts = (version => &getVersion ());
-my @opts_f = qw (verbose dryrun help reuse status);
+my @opts_f = qw (verbose dryrun help reuse status cancel);
 my @opts_s = qw (version);
 
 sub help
@@ -532,6 +575,7 @@ sub help
 );
 
 $opts{reuse} ||= $opts{status};
+$opts{reuse} ||= $opts{cancel};
 
 if ($opts{help})
   {
@@ -539,8 +583,11 @@ if ($opts{help})
     exit (0);
   }
 
-die unless ($opts{version});
-die unless (-d '.gitpack');
+die ("No version of tests was found\n")
+  unless ($opts{version});
+die ("Start davpack from within a pack\n")
+  unless (-d '.gitpack');
+
 &checkGmkpack ();
 
 my $pack = &cwd ();
@@ -618,6 +665,10 @@ if (! $opts{reuse})
 if ($opts{status})
   {
     &showStatus (%opts, nrv => $nrv);
+  }
+elsif ($opts{cancel})
+  {
+    &cancelDavai (%opts, nrv => $nrv);
   }
 elsif (! $opts{'dryrun'})
   {
