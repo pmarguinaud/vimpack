@@ -246,8 +246,23 @@ sub runCommand
 
   print "@cmd\n" if ($args{verbose});
 
-  system (@cmd) 
-    and die ("Command `@cmd' failed\n");
+  if ($args{stdout})
+    {
+      my $out = `@cmd`;
+      my $c = $?;
+      $c && goto ERROR;
+      return $out;
+    }
+  else
+    {
+      system (@cmd) 
+        and goto ERROR;
+    }
+
+  return;
+
+ERROR:
+  die ("Command `@cmd' failed\n");
 }
 
 sub runMitrailleCommand
@@ -259,7 +274,7 @@ sub runMitrailleCommand
 
   my $profile = "$ENV{HOME}/.mitraille_profile";
 
-  die unless (-f $profile);
+  die ("`$profile' was not found\n") unless (-f $profile);
 
   system ("set -e; source $profile; @cmd")
     and die ("Command `@cmd' failed\n");
@@ -268,7 +283,9 @@ sub runMitrailleCommand
 sub slurp
 {
   my $f = shift;
-  my $text = do { my $fh = 'FileHandle'->new ("<$f"); local $/ =  undef; <$fh> };
+  (my $fh = 'FileHandle'->new ("<$f")) or die ("Cannot open `$f'");
+  local $/ =  undef; 
+  my $text = <$fh>;
   return $text;
 }
 
@@ -403,6 +420,42 @@ sub patchCJob
   'FileHandle'->new (">$cjob")->print (join ('', @text));
 }
 
+sub submitJob
+{
+  my %args = @_;
+  my $job = $args{job};
+  my $out = &runCommand (%args, stdout => 1, command => ['sbatch', $job]);
+  my ($id) = ($out =~ m/Submitted batch job (\d+)/o);
+  'FileHandle'->new (">$job.id")->print ("$id\n");
+  return $id;
+}
+
+sub cancelJob
+{
+  my %args = @_;
+  my $job = $args{job};
+  return unless (-f "$job.id");
+  chomp (my $id = &slurp ("$job.id")); 
+  &runCommand (%args, command => ['scancel', $id]);
+  unlink ("$job.id");
+  return $id;
+}
+
+sub cancelMitraillette
+{
+  my %args = @_;
+
+  my $mitraillette = $args{mitraillette};
+
+  chdir ($mitraillette);
+
+  for my $cjob (<*.cjob>)
+    {
+      &cancelJob (%args, job => $cjob);
+    }
+
+}
+
 sub runMitrailletteTestCase
 {
   my %args = @_;
@@ -420,7 +473,7 @@ sub runMitrailletteTestCase
 
   for my $cjob (<*.cjob>)
     {
-      &runCommand (command => ['sbatch', $cjob], %args);
+      &submitJob (%args, job => $cjob);
     }
 
 }
@@ -615,7 +668,7 @@ sub getLastMitraillette
 }
 
 my %opts = (version => &getVersion ());
-my @opts_f = qw (verbose help reuse dryrun status status-edit-diff);
+my @opts_f = qw (verbose help reuse dryrun status status-edit-diff cancel);
 my @opts_s = qw (version reference);
 
 sub help
@@ -641,14 +694,17 @@ if ($opts{help})
     exit (0);
   }
 
-die unless ($opts{version});
-die unless (-f '.genesis');
+die ("No version of tests was found\n") 
+  unless ($opts{version});
+die ("Start mitpack from within a pack\n") 
+  unless (-f '.genesis');
 
 my $pack = &cwd ();
 
 my $mitraillette;
 
 $opts{reuse} ||= $opts{status};
+$opts{reuse} ||= $opts{cancel};
 
 if ($opts{reuse})
   {
@@ -673,6 +729,10 @@ else
 if ($opts{status})
   {
     &showStatus (mitraillette => $mitraillette, pack => $pack, %opts);
+  }
+elsif ($opts{cancel})
+  {
+    &cancelMitraillette (mitraillette => $mitraillette, %opts);
   }
 elsif (! $opts{dryrun})
   {
