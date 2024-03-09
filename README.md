@@ -33,39 +33,6 @@ List files in local view.
 It allows the user to debug interactively code at compile time : `gmkpack` 
 will invoke it when compiling a FORTRAN unit or linking an executable fails.
 
-`fixpack` will then start a interactive session allowing the user to edit
-the file being compiled and compile it with different options.
-
-Once the user exits the interactive session, the file (if modified) is copied
-back to the user local pack. `fixpack` will attempt to compile the file
-again.
-
-## SESSIONS
-
-Two kinds of interactive sessions are available (option `--type`):
-
-- xterm
-
-    `fixpack` will create an xterm running a shell in the directory used by 
-    `gmkpack`; this xterm will pop up in the user desktop.
-
-- screen
-
-    `fixpack` will create a screen session, that the user can attach to, using
-    `screen -x`.
-
-## ALIASES
-
-`fixpack` provides two aliases :
-
-- e
-
-    Edit the file.
-
-- r
-
-    Compile again.
-
 # [gdbpack ...](./doc/gdbpack.md)
 
 

@@ -20,6 +20,8 @@ Or in your ics\_masterodb :
 It allows the user to debug interactively code at compile time : `gmkpack` 
 will invoke it when compiling a FORTRAN unit or linking an executable fails.
 
+# DETAILS
+
 `fixpack` will then start a interactive session allowing the user to edit
 the file being compiled and compile it with different options.
 
