@@ -219,6 +219,17 @@ sub slurp
   return $text;
 }
 
+sub swapLink
+{
+  my $f = shift;
+  $f = 'File::Spec'->rel2abs ($f);
+  return unless (-l $f);
+  my $g = readlink ($f);
+  unlink ($f);
+  rename ($g, $f);
+  symlink ($f, $g);
+}
+
 sub getCurrentCommit
 {
   my %args = @_;
@@ -289,7 +300,7 @@ sub getConf
 
   my ($nrv) = @args{qw (nrv)};
 
-  my ($id) = ($nrv =~ m,/(dv-\d+-\w+\@\w+)/,o);
+  my ($id) = ($nrv =~ m,\b(dv-\d+-\w+\@\w+)/,o);
   
   die unless ($id);
   
@@ -534,33 +545,38 @@ die unless (-d '.gitpack');
 
 my $pack = &cwd ();
 
-my ($nrv, $nrvx);
+my $dv;
 
-if ($opts{reuse} && <nrv.*>)
+if ($opts{reuse} && (my @dv = sort <dv-*>))
   {
-    for (my $i = 0; ; $i++)
-      {
-        last unless (-l "nrv.$i");
-        $nrvx = "$pack/nrv.$i";
-        $nrv = readlink ($nrvx);
-      }
+    $dv = $dv[-1];
   }
 else
   {
-    $nrv = &davaiNewXp (%opts);
+    my $nrv = &davaiNewXp (%opts);
     
-    for (my $i = 0; ; $i++)
+    my @nrv = split (m,/,o, $nrv);
+    shift (@nrv) unless ($nrv[0]);
+
+    my ($xppath) = ('');
+
+    for my $p (@nrv)
       {
-        if (! -d "nrv.$i")
+        $xppath = "$xppath/$p";
+        if ($p =~ m/^dv-\d+/o)
           {
-            symlink ($nrv, "nrv.$i");
-            $nrvx = "$pack/nrv.$i";
+            $dv = $p;
             last;
           }
       }
+
+    symlink ($xppath, $dv);
+    &swapLink ($dv);
   }
 
-die unless ($nrv && $nrvx);
+die unless ($dv);
+
+my $nrv = 'File::Spec'->rel2abs ("$dv/davai/nrv");
 
 my @pack = &getPacks (pack => &cwd (), nrv => $nrv);
 
@@ -592,7 +608,7 @@ unless ($opts{dryrun} || $opts{status})
       }
   }
 
-chdir ($nrvx);
+chdir ($nrv);
 
 if (! $opts{reuse})
   {
