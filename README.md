@@ -27,11 +27,11 @@ will invoke it when compiling a FORTRAN unit or linking an executable fails.
 
 # [gdbpack ...](./doc/gdbpack.md)
 
-
+Run `gdb` on a pack executable.
 
 # [ddtpack ...](./doc/ddtpack.md)
 
-
+Run `ddt` on a pack executable.
 
 # [dotpack ...](./doc/dotpack.md)
 

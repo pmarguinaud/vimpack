@@ -8,6 +8,8 @@ C<gdbpack>
 
 =head1 DESCRIPTION
 
+Run C<gdb> on a pack executable.
+
 =head1 SEE ALSO
 
 C<gmkpack>, C<gdb>

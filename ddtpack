@@ -8,6 +8,10 @@ C<ddtpack>
 
 =head1 DESCRIPTION
 
+Run C<ddt> on a pack executable.
+
+=head1 DESCRIPTION
+
 =head1 SEE ALSO
 
 C<gmkpack>, C<ddt>
