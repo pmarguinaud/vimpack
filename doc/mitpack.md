@@ -11,10 +11,13 @@ mitpack
     $ mitpack --dryrun                           #  Create last test case, but do not run tasks
     $ mitpack --status                           #  Show a small report on all tasks
     $ mitpack --status --reference /path/to/ref  #  Show a small report on all tasks, compare with a reference
+    $ mitpack --cancel                           #  Cancel already submitted tasks
 
 # DESCRIPTION
 
 Run MITRAILLETTE test suite from within a pack.
+
+# DETAILS
 
 This script will : 
 
@@ -42,6 +45,10 @@ of the tasks.
 - --status
 
     Show the status for last test case.
+
+- --cancel
+
+    Cancel tasks (with scancel) for last test case.
 
 - --reference
 

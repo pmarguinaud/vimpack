@@ -11,10 +11,13 @@ davpack
   $ davpack                                   # Create & run new test case
   $ davpack --reuse                           # Rerun last test case
   $ davpack --status                          # See status of last test tasks
+  $ davpack --cancel                           #  Cancel already submitted tasks
 
 =head1 DESCRIPTION
 
 Run DAVAI test suite from within a pack. 
+
+=head1 DETAILS
 
 This script will :
 
@@ -59,6 +62,10 @@ Reuse last DAVAI test case.
 =item --status
 
 Show status of DAVAI tasks.
+
+=item --cancel
+
+Cancel tasks (with scancel) for last test case.
 
 =item --version
 
@@ -219,6 +226,17 @@ sub slurp
   return $text;
 }
 
+sub swapLink
+{
+  my $f = shift;
+  $f = 'File::Spec'->rel2abs ($f);
+  return unless (-l $f);
+  my $g = readlink ($f);
+  unlink ($f);
+  rename ($g, $f);
+  symlink ($f, $g);
+}
+
 sub getCurrentCommit
 {
   my %args = @_;
@@ -289,7 +307,7 @@ sub getConf
 
   my ($nrv) = @args{qw (nrv)};
 
-  my ($id) = ($nrv =~ m,/(dv-\d+-\w+\@\w+)/,o);
+  my ($id) = ($nrv =~ m,\b(dv-\d+-\w+\@\w+)/,o);
   
   die unless ($id);
   
@@ -446,6 +464,49 @@ sub colorStatus
     }
 }
 
+sub cancelDavai
+{
+  my %args = @_;
+  my $nrv = $args{nrv};
+
+  my $conf = &getConf (nrv => $nrv);
+  
+  my $dir = &getMtoolRoot (conf => $conf) . '/summaries_stack';
+
+  my @task = sort &uniq (map { &basename ($_, qw (.itself.json)) } <$dir/*.itself.json>);
+
+  for my $task (@task)
+    {
+      my $f = "$dir/$task.itself.json";
+      my $x = &JSON::decode_json (&slurp ($f));
+
+      my $MTOOL_STEP_DEPOT = $x->{Context}{MTOOL_STEP_DEPOT};
+      my @step = <$MTOOL_STEP_DEPOT/step.*.out>;
+      
+      my %id;
+      for my $step (@step)
+        {
+          my $text = &slurp ($step);
+
+          if (my ($id) = ($text =~ m/SLURM_JOBID="(\d+)"/goms))
+            {
+              $id{$id} = 1;
+            }
+
+          if (my ($id) = ($text =~ m/Submitted batch job (\d+)/goms))
+            {
+              $id{$id} = 1;
+            }
+        }
+
+      for my $id (sort keys (%id))
+        {
+          &runCommand (command => ['scancel', $id], %args);
+        }
+    }
+  
+}
+
 sub showStatus
 {
   my %args = @_;
@@ -505,7 +566,7 @@ sub showStatus
 }
 
 my %opts = (version => &getVersion ());
-my @opts_f = qw (verbose dryrun help reuse status);
+my @opts_f = qw (verbose dryrun help reuse status cancel);
 my @opts_s = qw (version);
 
 sub help
@@ -521,6 +582,7 @@ sub help
 );
 
 $opts{reuse} ||= $opts{status};
+$opts{reuse} ||= $opts{cancel};
 
 if ($opts{help})
   {
@@ -528,39 +590,47 @@ if ($opts{help})
     exit (0);
   }
 
-die unless ($opts{version});
-die unless (-d '.gitpack');
+die ("No version of tests was found\n")
+  unless ($opts{version});
+die ("Start davpack from within a pack\n")
+  unless (-d '.gitpack');
+
 &checkGmkpack ();
 
 my $pack = &cwd ();
 
-my ($nrv, $nrvx);
+my $dv;
 
-if ($opts{reuse} && <nrv.*>)
+if ($opts{reuse} && (my @dv = sort <dv-*>))
   {
-    for (my $i = 0; ; $i++)
-      {
-        last unless (-l "nrv.$i");
-        $nrvx = "$pack/nrv.$i";
-        $nrv = readlink ($nrvx);
-      }
+    $dv = $dv[-1];
   }
 else
   {
-    $nrv = &davaiNewXp (%opts);
+    my $nrv = &davaiNewXp (%opts);
     
-    for (my $i = 0; ; $i++)
+    my @nrv = split (m,/,o, $nrv);
+    shift (@nrv) unless ($nrv[0]);
+
+    my ($xppath) = ('');
+
+    for my $p (@nrv)
       {
-        if (! -d "nrv.$i")
+        $xppath = "$xppath/$p";
+        if ($p =~ m/^dv-\d+/o)
           {
-            symlink ($nrv, "nrv.$i");
-            $nrvx = "$pack/nrv.$i";
+            $dv = $p;
             last;
           }
       }
+
+    symlink ($xppath, $dv);
+    &swapLink ($dv);
   }
 
-die unless ($nrv && $nrvx);
+die unless ($dv);
+
+my $nrv = 'File::Spec'->rel2abs ("$dv/davai/nrv");
 
 my @pack = &getPacks (pack => &cwd (), nrv => $nrv);
 
@@ -592,7 +662,7 @@ unless ($opts{dryrun} || $opts{status})
       }
   }
 
-chdir ($nrvx);
+chdir ($nrv);
 
 if (! $opts{reuse})
   {
@@ -602,6 +672,10 @@ if (! $opts{reuse})
 if ($opts{status})
   {
     &showStatus (%opts, nrv => $nrv);
+  }
+elsif ($opts{cancel})
+  {
+    &cancelDavai (%opts, nrv => $nrv);
   }
 elsif (! $opts{'dryrun'})
   {

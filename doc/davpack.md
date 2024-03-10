@@ -9,10 +9,13 @@ davpack
     $ davpack                                   # Create & run new test case
     $ davpack --reuse                           # Rerun last test case
     $ davpack --status                          # See status of last test tasks
+    $ davpack --cancel                           #  Cancel already submitted tasks
 
 # DESCRIPTION
 
 Run DAVAI test suite from within a pack. 
+
+# DETAILS
 
 This script will :
 
@@ -37,6 +40,10 @@ Once the DAVAI tasks have ended, davpack will provide a short report for each of
 - --status
 
     Show status of DAVAI tasks.
+
+- --cancel
+
+    Cancel tasks (with scancel) for last test case.
 
 - --version
 

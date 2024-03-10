@@ -5,6 +5,10 @@
 
 bakpack
 
+=head1 DESCRIPTION
+
+Archive and retrieve packs.
+
 =head1 SYNOPSIS
 
 =head1 AUTHORS

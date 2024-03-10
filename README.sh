@@ -20,6 +20,9 @@ do
 
 EOF
 
+  ./desc.pl $f > $f.desc.pod
+  perldoc -o Markdown $f.desc.pod >> README.md
+  \rm $f.desc.pod
 
   perldoc -o Markdown $f > $md
 
