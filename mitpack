@@ -663,15 +663,9 @@ sub getLastMitraillette
 
   (my $pack = $args{pack}) or die;
 
-  my $mitraillette;
+  my @mitraillette = sort grep { -d && m/mitraille_\d\d\d\d$/o } <mitraille_????>;
 
-  for (my $i = 0; ; $i++)
-    {
-      last unless (-d "mitraillette.$i/");
-      $mitraillette = "$pack/mitraillette.$i";
-    }
-
-  return $mitraillette;
+  return pop (@mitraillette);
 }
 
 my %opts = (version => &getVersion ());
@@ -720,17 +714,9 @@ if ($opts{reuse})
 else
   {
     $mitraillette = &createMitrailletteTestCase (pack => $pack, %opts);
-    
-    for (my $i = 0; ; $i++)
-      {
-        if (! -d "$pack/mitraillette.$i")
-          {
-            my ($o, $t) = ($mitraillette, "$pack/mitraillette.$i");
-            symlink ($o, $t);
-            &swapLink ($t);
-            last;
-          }
-      }
+    my $local = "$pack/" . &basename ($mitraillette);
+    symlink ($mitraillette, $local);
+    &swapLink ($local);
   }
 
 if ($opts{status})
