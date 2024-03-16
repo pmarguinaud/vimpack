@@ -223,6 +223,7 @@ use strict;
 use Cwd;
 use FileHandle;
 use File::Path;
+use File::Spec;
 use File::Basename;
 use Data::Dumper;
 use Getopt::Long;
@@ -706,6 +707,9 @@ my $mitraillette;
 
 $opts{reuse} ||= $opts{status};
 $opts{reuse} ||= $opts{cancel};
+$opts{reference} = 'File::Spec'->rel2abs ($opts{reference})
+  if ($opts{reference});
+
 
 if ($opts{reuse})
   {
