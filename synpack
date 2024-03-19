@@ -1,0 +1,203 @@
+#!/usr/bin/perl -w
+
+use strict;
+use FileHandle;
+use Cwd;
+use File::stat;
+use File::Find;
+use File::Spec;
+use File::Copy;
+use Getopt::Long;
+use Data::Dumper;
+
+
+sub runCommand
+{
+  my %args = @_; 
+  my @cmd = @{ ${args}{command} };
+
+  my $cwd = &cwd ();
+
+  if ($args{chdir})
+    {
+      chdir ($args{chdir}) or die ("Cannot chdir $args{chdir}\n");
+    }
+
+  print "@cmd\n" if ($args{verbose});
+
+  my $c = system (@cmd);
+
+  chdir ($cwd);
+
+  $c and die ("Command `@cmd' failed\n");
+}
+
+sub gitpackRunCommand
+{
+  my %args = @_; 
+
+  my ($pack, $cwd) = ($args{pack}, &cwd ());
+
+  $pack && chdir ($pack);
+
+  my @cmd = @{ ${args}{command} };
+
+  print "@cmd\n" if ($args{verbose});
+
+  my $out = `@cmd`;
+
+  chdir ($cwd);
+
+  if (my $c = $?)
+    {
+      die ("Gitpack command `@cmd' failed\n");
+    }
+
+  return $out;
+}
+
+sub needReBuild
+{
+  my %args = @_;
+
+  my $pack = $args{pack} || &cwd ();
+
+  my $MASTERODB = "$pack/bin/MASTERODB";
+
+  return 1 unless (-f $MASTERODB);
+
+  my $t0 = stat ("$pack/bin/MASTERODB")->mtime ();
+
+  my $rebuild = 0;
+
+  &find ({wanted => sub 
+  {  
+    my $f = $File::Find::name;
+    return unless ((-f $f) && ($f =~ m/\.F90$/o));
+    my $st = stat ($f);
+    $rebuild ||= $st->mtime () > $t0;
+  }, no_chdir => 1}, "$pack/src/local/");
+
+  print "pack=$pack, rebuild=$rebuild\n";
+
+  return $rebuild;
+}
+
+sub slurp
+{
+  my $f = shift;
+  (my $fh = 'FileHandle'->new ("<$f")) or die ("Cannot open `$f'\n");
+  local $/ = undef;
+  my $data = <$fh>;
+  return $data;
+}
+
+sub filesEqual
+{
+  my ($f0, $f1) = @_;
+  return &slurp ($f0) eq &slurp ($f1);
+}
+
+
+=pod
+
+sub syncLocal
+{
+  my %args = @_;
+
+  my ($pack0, $pack1) = @args{qw (pack0 pack1)};
+  
+
+  &find ({wanted => sub 
+  {  
+    my $f = $File::Find::name;
+    return unless ((-f $f) && ($f =~ m/\.F90$/o));
+    $f = 'File::Spec'->abs2rel ($f, "$pack1/src/local/");
+    
+    print "$f\n";
+
+    my $f0 = "$pack0/src/local/$f";
+    my $f1 = "$pack1/src/local/$f";
+
+    return if (&filesEqual ($f0, $f1));
+
+    unlink ($f1);
+
+    print "$f0 -> $f1\n";
+
+    &copy ($f0, $f1);
+
+  }, no_chdir => 1}, "$pack1/src/local/");
+
+
+}
+
+=cut
+
+sub getBranch
+{
+  chomp (my $branch = &gitpackRunCommand (@_, command => [qw (gitpack rev-parse --abbrev-ref HEAD)]));
+  return $branch;
+}
+
+sub getCommit
+{
+  chomp (my $commit = &gitpackRunCommand (@_, command => [qw (gitpack rev-parse HEAD)]));
+  return $commit;
+}
+
+sub rebuildIfNeeded
+{
+  my %args = @_;
+  my $pack = $args{pack} || &cwd ();
+
+  &runCommand (%args, command => ['./ics_masterodb'], chdir => $pack)
+    if (&needReBuild (pack => $pack));
+}
+
+my %opts = (qw (verbose 0 commit Commit), pack0 => &cwd ());
+
+my @opts_f = qw (verbose help);
+my @opts_s = qw (commit pack0 pack1);
+
+sub help
+{
+  print "Usage: " . &basename ($0) . "\n" 
+      . " Options:\n" . join ('', map { "   --$_\n" } @opts_f, @opts_s);
+}
+
+if (-f '.synpack.conf')
+  {
+    unshift (@ARGV, @{ do ("./.synpack.conf") || [] });
+  }
+
+&GetOptions
+(
+  (map { ($_, \$opts{$_}) } @opts_f),
+  (map { ("$_=s", \$opts{$_}) } @opts_s),
+);
+
+my $pack0 = 'File::Spec'->rel2abs ($opts{pack0});
+my $pack1 = 'File::Spec'->rel2abs ($opts{pack1});
+
+for my $opt (qw (pack0 pack1))
+  {
+    die unless ($opts{$opt});
+    die unless (-f "$opts{$opt}/.genesis");
+  }
+
+&rebuildIfNeeded (%opts, pack => $pack0);
+
+&gitpackRunCommand (%opts, pack => $pack0, command => [qw (gitpack commit -a), -m => $opts{commit}]);
+
+my $branch0 = &getBranch (pack => $pack0);
+my $branch1 = &getBranch (pack => $pack1);
+
+die unless ($branch0 eq $branch1);
+
+# &syncLocal (pack0 => $pack0, pack1 => $pack1);
+
+&gitpackRunCommand (%opts, pack => $pack1, command => [qw (gitpack pull), "$pack0/.gitpack/git", $branch0]);
+
+&rebuildIfNeeded (%opts, pack => $pack1);
+

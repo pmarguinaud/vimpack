@@ -1,0 +1,786 @@
+#!/usr/bin/perl -w
+
+=head1 NAME
+
+davpack
+
+=head1 SYNOPSIS
+
+  $ cd pack
+  $ cd 49t1_tot2nvmassweno.03.IMPIIFC2018.x
+  $ davpack                                   # Create & run new test case
+  $ davpack --reuse                           # Rerun last test case
+  $ davpack --status                          # See status of last test tasks
+  $ davpack --cancel                           #  Cancel already submitted tasks
+
+=head1 DESCRIPTION
+
+Run DAVAI test suite from within a pack. 
+
+=head1 DETAILS
+
+This script will :
+
+=over 4
+
+=item 
+
+Create the DAVAI test case and initialize the CIBOULAI interface.
+
+=item 
+
+Compile the executables required for DAVAI.
+
+=item 
+
+Check for other packs (single precision, bound checking) if enabled in the DAVAI configuration
+
+=item 
+
+Create the required symbolic links so that DAVAI can use the executables
+
+=item 
+
+Start the DAVAI test suite
+
+=back
+
+Once the DAVAI tasks have ended, davpack will provide a short report for each of the tasks.
+
+=head1 OPTIONS
+
+=over 4
+
+=item --dryrun
+
+Do everything, but do not start DAVAI test suite.
+
+=item --reuse
+
+Reuse last DAVAI test case.
+
+=item --status
+
+Show status of DAVAI tasks.
+
+=item --cancel
+
+Cancel tasks (with scancel) for last test case.
+
+=item --version
+
+Version of DAVAI tests. We try to guess the version from the cycle, but you may have 
+to provide it yourself.
+
+=back
+
+=head1 CONFIGURATION
+
+You need to provide a ~/.davai_profile. In this file, please provide the shell commands
+which will enable DAVAI; for instance, on belenos/taranis : 
+
+  module use ~mary/public/modulefiles 
+  module load git/2.27.0
+  module load python/3.7.6 
+  module load davai
+
+This file will be used by davpack to enable DAVAI environment before issuing DAVAI commands.
+
+=head1 REQUIREMENTS
+
+=over 4
+
+=item davai
+
+=item gmkpack
+
+=item gitpack
+
+=back
+
+=head1 SEE ALSO
+
+C<gmkpack>, C<DAVAI>
+
+=head1 AUTHOR
+
+pmarguinaud@hotmail.com
+
+=cut
+
+package ini;
+
+use FileHandle;
+use Data::Dumper;
+use strict;
+
+sub read
+{
+  shift;
+
+  my $f = shift;
+  
+  my @line = do { my $fh = 'FileHandle'->new ("<$f"); <$fh> };
+  
+  my ($section, $current, $key) = ('') x 3;
+  
+  my $h = {};
+  
+  my $push = sub
+  {
+    return unless (length ($section) && length ($current));
+    $h->{$section}{$key} = $current;
+    ($current, $key) = ('') x 2;
+  };
+  
+  for my $i (0 .. $#line)
+    {
+      my $line = $line[$i];
+  
+      for ($line)
+        {
+          chomp;
+          s/^\s*//o;
+          s/ [;#].*//o;
+          s/^[;#].*//o;
+        }
+  
+      next unless (length ($line));
+  
+      if ($line =~ m/^\[(\w+)\]\s*$/o)
+        {
+          my $s = $1;
+          $push->();
+          $section = $s;
+        }
+      elsif ($line =~ s/^(\w+)\s*=\s*//o)
+        {
+          die unless ($section);
+          my $k = $1;
+          $push->();
+          $key = $k;
+          $current = $line;
+        }
+      else
+        {
+          $current .= ' ';
+          $current .= $line;
+        }
+  
+    }
+
+  return $h;
+}
+
+sub write
+{
+  shift;
+  my ($f, $h) = @_;
+
+  my $fh = 'FileHandle'->new (">$f");
+
+  my @key;
+
+  for my $section (sort keys (%$h))
+    {
+      push @key, sort keys (%{ $h->{$section} });
+    }
+
+  my @len = sort { $b <=> $a } map { length ($_) } @key;
+  my $len = $len[0];
+
+  for my $section (sort keys (%$h))
+    {
+      $fh->printf ("[%s]\n", $section);
+
+      next unless (my @key = sort keys (%{ $h->{$section} }));
+     
+      for my $key (@key)
+        {
+          $fh->printf ("%-${len}s = %s\n", $key, $h->{$section}{$key});
+	}
+
+      $fh->print ("\n");
+    }
+
+  $fh->close ();
+}
+
+package main;
+
+use strict;
+use local::lib;
+use Cwd;
+use FileHandle;
+use File::Path;
+use File::Basename;
+use Data::Dumper;
+use Getopt::Long;
+use JSON;
+use Storable;
+use POSIX qw (strftime);
+use File::stat;
+use Term::ANSIColor;
+
+use FindBin qw ($Bin);
+use lib "$Bin/lib";
+use bt;
+
+sub runCommand
+{
+  my %args = @_;
+  my @cmd = @{ ${args}{command} };
+
+  print "@cmd\n" if ($args{verbose});
+
+  system (@cmd) 
+    and die ("Command `@cmd' failed\n");
+}
+
+sub davaiRunCommand
+{
+  my %args = @_;
+  my @cmd = @{ ${args}{command} };
+
+  print "@cmd\n" if ($args{verbose});
+
+  my $profile = "$ENV{HOME}/.davai_profile";
+  die unless (-f $profile);
+
+  my $out = `set -e ; source $profile > /dev/null 2>&1; @cmd`;
+  my $c = $?;
+  $c && die ("Davai command `@cmd' failed\n");
+
+  return $out;
+}
+
+sub gitpackRunCommand
+{
+  my %args = @_;
+
+  my @cmd = @{ ${args}{command} };
+
+  print "@cmd\n" if ($args{verbose});
+
+  my $out = `@cmd`;
+  my $c = $?;
+  $c && die ("Gitpack command `@cmd' failed\n");
+
+  return $out;
+}
+
+sub davaiNewXp
+{
+  my %args = @_;
+
+  my $branch = &getBranch (%args);
+  my $commit = &getCommit (%args);
+
+  my $out = &davaiRunCommand (command => ['davai-new_xp', -v => $args{version},  
+                                          -c => "$branch:$commit", $branch], 
+                              %args);
+  my ($nrv) = ($out =~ m/=> (\S+)/goms);
+  return $nrv;
+}
+
+sub getBranch
+{
+  chomp (my $branch = &gitpackRunCommand (@_, command => [qw (gitpack rev-parse --abbrev-ref HEAD)]));
+  return $branch;
+}
+
+sub getCommit
+{
+  chomp (my $commit = &gitpackRunCommand (@_, command => [qw (gitpack rev-parse HEAD)]));
+  return $commit;
+}
+
+my %pack2davai =
+(
+  ioassign  => 'ioassign',
+  BATOR     => 'batodb',
+  lfitools  => 'lfitools',
+  MASTERODB => 'masterodb',
+  OOTESTVAR => 'oopsbinary.ifs-ootestvar',
+  OOVAR     => 'oopsbinary.ifs-oovar',
+  PGD       => 'buildpgd',
+  PREP      => 'prep',
+  MASTERODB => 'ifsmodel.ifs',
+  OOTESTVAR => 'oopsbinary.ifs-ootestcomponent',
+);
+      
+sub getGenesis
+{
+  chomp (my $genesis = &slurp ('.genesis'));
+  my @genesis = split (m/\s+/o, $genesis);
+  return @genesis;
+}
+
+sub slurp
+{
+  my $f = shift;
+  my $fh = 'FileHandle'->new ("<$f"); 
+  die ("Could not open `$f' for reading\n") unless ($fh);
+  local $/ =  undef; 
+  my $text = <$fh>;
+  return $text;
+}
+
+sub swapLink
+{
+  my $f = shift;
+  $f = 'File::Spec'->rel2abs ($f);
+  return unless (-l $f);
+  my $g = readlink ($f);
+  unlink ($f);
+  rename ($g, $f);
+  symlink ($f, $g);
+}
+
+sub getCurrentCommit
+{
+  my %args = @_;
+  my $pack = $args{pack};
+
+  return '' unless (-d '.gitpack');
+
+  chomp (my $commit = `gitpack rev-parse HEAD`);
+
+  return $commit;
+}
+
+sub compileBinaries
+{
+  my %args = @_;
+  my $pack = $args{pack};
+
+  my @binlist = ('MASTERODB', grep ({ $_ ne 'MASTERODB' } sort (keys (%pack2davai))));
+
+  for my $program (sort keys (%pack2davai))
+    {
+      goto COMPILE unless (-f "$pack/bin/$program");
+    }
+
+  return;
+
+COMPILE:
+
+  my $cwd = &cwd ();
+
+  chdir ($pack);
+
+  my @genesis = &getGenesis ();
+
+  my $binlist = join (',', map { lc ($_) } @binlist);
+
+  if (grep { $_ eq '-p' } @genesis)
+    {
+      for my $i (0 .. $#genesis)
+        {
+          if ($genesis[$i] eq '-p')
+            {
+              $genesis[$i+1] = $binlist;
+            }
+        }
+    }
+  else
+    {
+      push @genesis, (-p => $binlist);
+    }
+
+  unlink ('ics_masterodb_etc');
+
+  &runCommand (command => [@genesis], %args);
+
+  (my $ics = &slurp ('ics_masterodb_etc')) =~ s/GMK_THREADS=1\b/GMK_THREADS=16/goms;
+  'FileHandle'->new ('>ics_masterodb_etc')->print ($ics);
+  chmod (0755, $ics);
+
+  &runCommand (command => ['./ics_masterodb_etc'], %args);
+  
+  chdir ($cwd);
+}
+
+sub getConf
+{
+  my %args = @_;
+
+  my ($nrv) = @args{qw (nrv)};
+
+  my ($id) = ($nrv =~ m,\b(dv-\d+-\w+\@\w+)/,o);
+  
+  die unless ($id);
+  
+  my ($host, $user) = ($id =~ m/^dv-\d+-(\w+)\@(\w+)$/o);
+  
+  die unless ($host && $user);
+  
+  my $conf = 'ini'->read ("$nrv/DAVAI-tests/conf/$host.ini");
+  my ($compilation_flavour) = ($conf =~ m/compilation_flavour\s*=\s*(\S+)/goms);
+  my ($compilation_flavours) = ($conf =~ m/compilation_flavours\s*=\s*list\(\s*(.*?)\s*\)/goms);
+  $compilation_flavours = [split (m/\s*,\s*/o, $compilation_flavours)];
+
+  my ($executables_fmt) = ($conf =~ m/executables_fmt\s*=\s*(\S+)/goms);
+  die unless ($compilation_flavour && $executables_fmt);
+  
+  $conf = 
+    {
+      host => $host,
+      user => $user,
+      id   => $id,
+      compilation_flavour  => $compilation_flavour,
+      compilation_flavours => $compilation_flavours,
+      executables_fmt      => $executables_fmt,
+    };
+
+  return $conf;
+}
+
+sub getPacks
+{
+  my %args = @_;
+  my ($pack, $nrv) = @args{qw (pack nrv)};
+
+  my $conf = &getConf (nrv => $nrv);
+
+  for my $flavour (@{ $conf->{gmkpack}{compilation_flavours} })
+    {
+      $pack =~ s/$flavour$//;
+    }
+
+  my @pack;
+
+  for my $flavour (@{ $conf->{gmkpack}{compilation_flavours} })
+    {
+      push @pack, "$pack$flavour" if (-d "$pack$flavour");
+    }
+
+  return @pack;
+}
+
+sub getMtoolRoot
+{
+  my %args = @_;
+  my $conf = $args{conf};
+
+  return "/scratch/mtool/$conf->{user}/cache/vortex/davai/nrv/$conf->{id}";
+}
+
+sub setBinaryLinks
+{
+  my %args = @_;
+  my ($pack, $nrv) = @args{qw (pack nrv)};
+
+  my $conf = &getConf (nrv => $nrv);
+
+  my ($compilation_flavour) = grep ({ $pack =~ m/$_$/ } @{ $conf->{default_compilation_flavour}{compilation_flavours} });
+  $compilation_flavour = lc ($compilation_flavour);
+  
+  my $pack2bin = &getMtoolRoot (conf => $conf) . "/pack2bin.$compilation_flavour";
+  
+  &mkpath ($pack2bin);
+
+  for my $bin (sort keys (%pack2davai))
+    {
+      die ("Missing `$pack/bin/$bin'") unless (-f "$pack/bin/$bin");
+      my ($o, $t) = ("$pack/bin/$bin", "$pack2bin/$pack2davai{$bin}.$conf->{DEFAULT}{executables_fmt}");
+      next if (-l $t);
+      symlink ($o, $t) or die ("Cannot symlink $o -> $t");
+      print "symlink $o -> $t\n" if ($args{verbose});
+    }
+  
+}
+
+sub getCycle
+{
+  my @genesis = &getGenesis ();
+  for my $i (0 .. $#genesis)
+    {
+      return $genesis[$i+1] if ($genesis[$i] eq '-r');
+    }
+}
+
+sub getVersion
+{
+  my %cycle2version =
+  (
+    '49t0' => 'DV49T0',
+    '49t1' => 'DV49T1',
+  );
+
+  my $cycle = &getCycle ();
+  
+  return $cycle2version{$cycle};
+}
+
+sub checkGmkpack
+{
+  my @PATH = split (m/:/o, $ENV{PATH});
+  for my $PATH (@PATH)
+    {
+      my $gmkpack = "$PATH/gmkpack";
+      goto FOUND if (-f $gmkpack && -x $gmkpack);
+    }
+
+  die "gmkpack was not found in $ENV{PATH}";
+  
+FOUND:
+
+}
+
+sub center
+{
+  my ($s, $n) = @_; 
+  my $i = 0;
+  while (length ($s) < $n) 
+    {   
+      $s = $i % 2 ? " $s" : "$s ";
+      $i++;
+    }   
+  return $s; 
+}
+
+sub colorStatus
+{
+  my $text = shift;
+  (my $status = $text) =~ s/(?:^\s*|\s*$)//go;
+
+  my %color = 
+  (
+    KO                => 'red',
+    OK                => 'green',
+    '(C...)'          => 'yellow',
+    '(I...)'          => 'yellow',
+    'X:R?'            => 'yellow',
+  );
+
+  if ((-t STDOUT) && (my $color = $color{$status}))
+    {
+      return &colored ([$color], $text);
+    }
+  else
+    {
+      return $text;
+    }
+}
+
+sub cancelDavai
+{
+  my %args = @_;
+  my $nrv = $args{nrv};
+
+  my $conf = &getConf (nrv => $nrv);
+  
+  my $dir = &getMtoolRoot (conf => $conf) . '/summaries_stack';
+
+  my @task = sort &uniq (map { &basename ($_, qw (.itself.json)) } <$dir/*.itself.json>);
+
+  for my $task (@task)
+    {
+      my $f = "$dir/$task.itself.json";
+      my $x = &JSON::decode_json (&slurp ($f));
+
+      my $MTOOL_STEP_DEPOT = $x->{Context}{MTOOL_STEP_DEPOT};
+      my @step = <$MTOOL_STEP_DEPOT/step.*.out>;
+      
+      my %id;
+      for my $step (@step)
+        {
+          my $text = &slurp ($step);
+
+          if (my ($id) = ($text =~ m/SLURM_JOBID="(\d+)"/goms))
+            {
+              $id{$id} = 1;
+            }
+
+          if (my ($id) = ($text =~ m/Submitted batch job (\d+)/goms))
+            {
+              $id{$id} = 1;
+            }
+        }
+
+      for my $id (sort keys (%id))
+        {
+          &runCommand (command => ['scancel', $id], %args);
+        }
+    }
+  
+}
+
+sub showStatus
+{
+  my %args = @_;
+  my $nrv = $args{nrv};
+
+  my $conf = &getConf (nrv => $nrv);
+  
+  my $dir = &getMtoolRoot (conf => $conf) . '/summaries_stack';
+
+  use List::Util qw (uniq max);
+  
+  my @suff = qw (.itself.json .consistency.json .continuity.json);
+  my @task = sort &uniq (map { &basename ($_, @suff) } <$dir/*.json>);
+
+  my $len = &max (map { length ($_) } @task);
+  
+
+  printf (" | %-${len}s ", "");
+  for my $suff (@suff)
+    {
+      (my $s = $suff) =~ s/(?:^\.|\.json$)//go;
+      printf (" | %20s ", &center ($s, 20));
+    }
+  printf (" | \n");
+
+  for my $task (@task)
+    {
+      printf (" | %-${len}s ", $task);
+      for my $suff (@suff)
+        {
+          my $f = "$dir/$task$suff";
+          unless (-f $f)
+            {
+              printf (" | %20s ", "");
+              next;
+            }
+          my $x = &JSON::decode_json (&slurp ($f));
+#         print &Dumper ($x);
+          if (my $status = $x->{comparisonStatus}{symbol} || $x->{Status}{symbol})
+            {
+              my $st = stat ($f);
+              my $dt = strftime ('%Y-%m-%d %H:%M:%S', localtime ($st->mtime ()));
+#             printf (" %s | ", $dt);
+              printf (" | %20s ", &colorStatus (&center ($status, 20)));
+            }
+          else
+            {
+              printf (" | %20s ", "");
+            }
+        }
+      printf (" | \n");
+    }
+
+# {Listings}{"Compare listings at uri(s)"}{ref}
+# {Listings}{"Compare listings at uri(s)"}{test}
+
+}
+
+my %opts = (version => &getVersion ());
+my @opts_f = qw (verbose dryrun help reuse status cancel);
+my @opts_s = qw (version);
+
+sub help
+{
+  print "Usage: " . &basename ($0) . "\n" 
+      . " Options:\n" . join ('', map { "   --$_\n" } @opts_f, @opts_s);
+}
+
+&GetOptions
+(
+  (map { ($_, \$opts{$_}) } @opts_f),
+  (map { ("$_=s", \$opts{$_}) } @opts_s),
+);
+
+$opts{reuse} ||= $opts{status};
+$opts{reuse} ||= $opts{cancel};
+
+if ($opts{help})
+  {
+    &help (); 
+    exit (0);
+  }
+
+die ("No version of tests was found\n")
+  unless ($opts{version});
+die ("Start davpack from within a pack\n")
+  unless (-d '.gitpack');
+
+&checkGmkpack ();
+
+my $pack = &cwd ();
+
+my $dv;
+
+if ($opts{reuse} && (my @dv = sort <dv-*>))
+  {
+    $dv = $dv[-1];
+  }
+else
+  {
+    my $nrv = &davaiNewXp (%opts);
+    
+    my @nrv = split (m,/,o, $nrv);
+    shift (@nrv) unless ($nrv[0]);
+
+    my ($xppath) = ('');
+
+    for my $p (@nrv)
+      {
+        $xppath = "$xppath/$p";
+        if ($p =~ m/^dv-\d+/o)
+          {
+            $dv = $p;
+            last;
+          }
+      }
+
+    symlink ($xppath, $dv);
+    &swapLink ($dv);
+  }
+
+die unless ($dv);
+
+my $nrv = 'File::Spec'->rel2abs ("$dv/davai/nrv");
+
+my @pack = &getPacks (pack => &cwd (), nrv => $nrv);
+
+unless ($opts{dryrun} || $opts{status})
+  {
+    # Check all pack are at the same commit
+
+    my %commit;
+    for my $pack (@pack)
+      {
+        $commit{$pack} = &getCurrentCommit (pack => $pack);
+      }
+
+    if (grep { $commit{$pack} ne $commit{$_} } @pack)
+      {
+         for my $pack (@pack)
+           {
+             printf (" %s %s\n", $commit{$pack}, $pack);
+           }
+         die ("Commit mismatch\n");
+      }
+
+    # Create davai executables if necessary
+
+    for my $pack (@pack)
+      {
+        &compileBinaries (pack => $pack, %opts);
+        &setBinaryLinks (pack => $pack, nrv => $nrv, %opts);
+      }
+  }
+
+chdir ($nrv);
+
+if (! $opts{reuse})
+  {
+    &davaiRunCommand (command => ['davai-ciboulai_init'], %opts);
+  }
+
+if ($opts{status})
+  {
+    &showStatus (%opts, nrv => $nrv);
+  }
+elsif ($opts{cancel})
+  {
+    &cancelDavai (%opts, nrv => $nrv);
+  }
+elsif (! $opts{'dryrun'})
+  {
+    &davaiRunCommand (command => ['davai-run_tests'], %opts);
+  }
+
+
+
