@@ -155,10 +155,10 @@ sub rebuildIfNeeded
     if (&needReBuild (pack => $pack));
 }
 
-my %opts = (qw (verbose 0 commit Commit), pack0 => &cwd ());
+my %opts = (qw (verbose 0 message Commit), pack0 => &cwd ());
 
 my @opts_f = qw (verbose help);
-my @opts_s = qw (commit pack0 pack1);
+my @opts_s = qw (message pack0 pack1);
 
 sub help
 {
@@ -188,7 +188,7 @@ for my $opt (qw (pack0 pack1))
 
 &rebuildIfNeeded (%opts, pack => $pack0);
 
-&gitpackRunCommand (%opts, pack => $pack0, command => [qw (gitpack commit -a), -m => $opts{commit}]);
+&gitpackRunCommand (%opts, pack => $pack0, command => [qw (gitpack commit -a), -m => $opts{message}]);
 
 my $branch0 = &getBranch (pack => $pack0);
 my $branch1 = &getBranch (pack => $pack1);

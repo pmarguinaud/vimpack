@@ -198,7 +198,7 @@ use Data::Dumper;
 use File::Path;
 use vimpack::mini;
 
-my @opts = qw (d v i g b w h x);
+my @opts = qw (d v i g b w h x s);
 my %opts = map { ($_, 0), } @opts;
 &GetOptions (map { ($_, \$opts{$_}) } @opts);
 
@@ -207,6 +207,7 @@ if ($opts{h})
     print << "EOF";
 vimpack 
   -d    Open vimdiff (difference with base pack and current pack)
+  -s    Ignore whitespace in diff mode
   -i    Create index and exits
   -g    Use GUI vim
   -b    Open a backtrace
@@ -293,6 +294,13 @@ command! -nargs=0 OR     :perl $::EDITOR->UCOM ();
 
 autocmd BufWinEnter   *  :perl $::EDITOR->ICOM (auto => 1);
 EOF
+
+if ($opts{s})
+  {
+    $hCOM->print (<< 'EOF');
+set diffopt+=iwhite
+EOF
+  }
 
 # command! -nargs=0 H    :perl $EDITOR->LOGHIST ()
 
