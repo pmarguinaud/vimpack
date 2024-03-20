@@ -76,7 +76,7 @@ sub getEnvironmentVariables
                ENVIRONMENT MODULEPATH MODULESHOME QT_GRAPHICSSYSTEM_CHECKED 
                QT_PLUGIN_PATH TMP TMPDIR USER WORKDIR XDG_DATA_DIRS
                XDG_RUNTIME_DIR XDG_SESSION_ID ftdir tmpdir workdir
-               MODULESHOME TERM);
+               MODULESHOME TERM PWD);
 
   my %skip = map { ($_, 1) } @skip;
 
