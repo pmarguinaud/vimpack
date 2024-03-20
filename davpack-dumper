@@ -127,6 +127,7 @@ sub fixLFI
             }
         } 
   
+      unlink ($f);
       'FileHandle'->new (">$f")->print (@line);
     }
 
