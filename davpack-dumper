@@ -86,7 +86,7 @@ sub getEnvironmentVariables
 
   for my $var (sort keys (%ENV))
     {
-      next if ($var =~ m/^(?:SLURM|I_MPI_|DAPL|MPIAUTO|SSH_|MTOOL_|CIBOULAI_|DAVAI_|VORTEX_)/o);
+      next if ($var =~ m/^(?:SLURM|I_MPI_|DAPL|MPIAUTO|SSH_|MTOOL_|CIBOULAI_|DAVAI_|VORTEX_|RD_)/o);
       next if ($skip{$var});
       next if ((my $val = $ENV{$var}) =~ m/\n/o);
       $val =~ s!^$olddir!$newdir!;
