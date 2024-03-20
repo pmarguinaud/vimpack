@@ -11,7 +11,7 @@ davpack
   $ davpack                                   # Create & run new test case
   $ davpack --reuse                           # Rerun last test case
   $ davpack --status                          # See status of last test tasks
-  $ davpack --cancel                           #  Cancel already submitted tasks
+  $ davpack --cancel                          # Cancel already submitted tasks
 
 =head1 DESCRIPTION
 
@@ -301,7 +301,7 @@ COMPILE:
   chdir ($cwd);
 }
 
-sub getConf
+sub getConfPath
 {
   my %args = @_;
 
@@ -315,6 +315,24 @@ sub getConf
   
   die unless ($host && $user);
   
+  return "$nrv/DAVAI-tests/conf/$host.ini";
+}
+
+
+sub getConf
+{
+  my %args = @_;
+
+  my ($nrv) = @args{qw (nrv)};
+
+  my ($id) = ($nrv =~ m,\b(dv-\d+-\w+\@\w+)/,o);
+  
+  die unless ($id);
+  
+  my ($host, $user) = ($id =~ m/^dv-\d+-(\w+)\@(\w+)$/o);
+  
+  die unless ($host && $user);
+
   my $conf = &slurp ("$nrv/DAVAI-tests/conf/$host.ini");
   my ($compilation_flavour) = ($conf =~ m/compilation_flavour\s*=\s*(\S+)/goms);
   my ($compilation_flavours) = ($conf =~ m/compilation_flavours\s*=\s*list\(\s*(.*?)\s*\)/goms);
@@ -325,6 +343,7 @@ sub getConf
   
   $conf = 
     {
+      conf => "$nrv/DAVAI-tests/conf/$host.ini",
       host => $host,
       user => $user,
       id   => $id,
@@ -566,7 +585,7 @@ sub showStatus
 }
 
 my %opts = (version => &getVersion ());
-my @opts_f = qw (verbose dryrun help reuse status cancel);
+my @opts_f = qw (verbose dryrun help reuse status cancel dumper);
 my @opts_s = qw (version);
 
 sub help
@@ -626,6 +645,33 @@ else
 
     symlink ($xppath, $dv);
     &swapLink ($dv);
+
+    if ($opts{dumper})
+      {
+        my $dvpath = 'File::Spec'->rel2abs ($dv);
+
+        my $dumper = "$Bin/davpack-dumper";
+        my $dumperConf = "$dvpath/mpiauto.DUMPER.conf";
+
+        my $opts =
+        {
+          opts =>  
+            {   
+              'prefix-mpirun' => ['=', [$dumper, '--path', $dvpath]],
+            },  
+        };
+
+        local $Data::Dumper::Terse = 1;
+        'FileHandle'->new (">$dumperConf")->print (&Dumper ($opts));
+
+        my $confPath = &getConfPath (nrv => $nrv);
+  
+        my $text = &slurp ($confPath);
+
+        $text =~ s/(MPIAUTOCONFIG[ ]*)=[ ]*.*?\n/$1=$dumperConf\n/gos;
+
+        'FileHandle'->new (">$confPath")->print ($text);
+      }
   }
 
 die unless ($dv);

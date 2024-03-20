@@ -1,0 +1,234 @@
+#!/usr/bin/perl -w
+
+use FindBin qw ($Bin);
+use lib "$Bin/perl5";
+
+use Getopt::Long;
+use FileHandle;
+use Data::Dumper;
+use File::Path;
+use File::Spec;
+use File::Basename;
+use JSON;
+use POSIX;
+use Cwd qw ();
+use strict;
+
+sub cmdline
+{
+  my $pid = shift;
+  my $cmdline = &slurp ("/proc/$pid/cmdline"); 
+  my @cmdline = split (m/\0/o, $cmdline);
+  return @cmdline;
+}
+
+sub slurp
+{
+  my $f = shift;
+  my $data = do { my $fh = 'FileHandle'->new ("<$f"); local $/ = undef; <$fh> };
+  return $data;
+}
+
+sub getScontrol
+{
+  my $json = '.scontrol.json';  
+
+  system ("scontrol --json show job $ENV{SLURM_JOBID} > $json")
+    unless (-f $json);
+
+  my $scontrol = &decode_json (&slurp ($json));
+
+  return $scontrol;
+}
+
+sub getSbatchScript
+{
+  my $scontrol = &getScontrol ();
+
+  my $script = $scontrol->{jobs}[0]{command};
+
+  return $script;
+}
+
+sub getSbatchHeader
+{
+  my $script = &getSbatchScript ();
+
+  my @h = do { my $fh = 'FileHandle'->new ("<$script"); <$fh> };
+
+  @h = grep { m/^#SBATCH/o } @h;
+
+  return @h;
+}
+
+sub getMPICommand
+{
+  return &cmdline (&POSIX::getppid ());
+}
+
+sub getEnvironmentVariables
+{
+  my %args = @_;
+
+  my @skip = qw (HOME DISPLAY HISTCONTROL HISTSIZE HOSTNAME LD_PRELOAD LANG 
+               LOADEDMODULES LOGNAME OMP_NUM_THREADS PATH PMI_TIME SHELL 
+               SHLVL _ _MPIAUTORANK LESSOPEN LS_COLORS MAIL MANPATH FTDIR 
+               ENVIRONMENT MODULEPATH MODULESHOME QT_GRAPHICSSYSTEM_CHECKED 
+               QT_PLUGIN_PATH TMP TMPDIR USER WORKDIR XDG_DATA_DIRS
+               XDG_RUNTIME_DIR XDG_SESSION_ID ftdir tmpdir workdir
+               MODULESHOME TERM);
+
+  my %skip = map { ($_, 1) } @skip;
+
+  my %env;
+
+  my ($olddir, $newdir) = @args{qw (olddir newdir)};
+
+  for my $var (sort keys (%ENV))
+    {
+      next if ($var =~ m/^(?:SLURM|I_MPI_|DAPL|MPIAUTO|SSH_|MTOOL_|CIBOULAI_|DAVAI_|VORTEX_)/o);
+      next if ($skip{$var});
+      next if ((my $val = $ENV{$var}) =~ m/\n/o);
+      $val =~ s!^$olddir!$newdir!;
+      $env{$var} = $val;
+    }
+
+  return %env;
+}
+
+sub fixLFI
+{
+  my %args = @_;
+
+  my ($olddir, $newdir) = @args{qw (olddir newdir)};
+
+  for my $d (<*.d>)
+    {
+      (my $f = $d) =~ s/\.d$//o;
+      my @line = do { my $fh = 'FileHandle'->new ("<$f"); <$fh> };
+      for my $line (@line)
+        {
+          chomp (my $ll = $line);
+          
+          if ($ll =~ m/^$olddir/o)
+            {
+              $ll = 'File::Spec'->abs2rel ($ll, $olddir);
+              if (-f $ll)
+                {
+                  $line = "$ll\n";
+                }
+            }
+          elsif ($ll =~ s,^\./,,o)
+            {
+              if (-f $ll)
+                {
+                  $line = "$ll\n";
+                }
+            }
+        } 
+  
+      'FileHandle'->new (">$f")->print (@line);
+    }
+
+}
+
+my %opts = (path => '');
+my @opts_f = qw (failed-only verbose help);
+my @opts_s = qw (path);
+
+sub help
+{
+  print "Usage: " . &basename ($0) . "\n" 
+      . " Options:\n" . join ('', map { "   --$_\n" } @opts_f, @opts_s);
+}
+
+&GetOptions
+(
+  (map { ($_, \$opts{$_}) } @opts_f),
+  (map { ("$_=s", \$opts{$_}) } @opts_s),
+);
+
+if ($opts{help})
+  {
+    &help (); 
+    exit (0);
+  }
+
+my $olddir = &Cwd::cwd ();
+my $newdir = 'File::Spec'->canonpath (join ('/', $ENV{workdir}, &basename ($opts{path}), &basename ($olddir)));
+my $davdir = 'File::Spec'->canonpath (join ('/', $opts{path}, &basename ($olddir)));
+
+if ((system (@ARGV) == 0) && $opts{'failed-only'})
+  {
+    exit (0);
+  }
+
+if ($opts{path} && (-d "$davdir/"))
+  {
+    exit (0);
+  }
+
+&rmtree ($newdir);
+&mkpath ($newdir);
+
+my $fh = 'FileHandle'->new ('>run.sh');
+
+$fh->print ("#!/bin/bash\n");
+
+my @head = &getSbatchHeader ();
+
+for (@head)
+  {
+    $fh->print ($_);
+  }
+
+$fh->print (<< "EOF");
+
+set -x
+ulimit -s unlimited
+ulimit -c 0
+
+cd $newdir
+
+EOF
+
+my %env = &getEnvironmentVariables (olddir => $olddir, newdir => $newdir);
+
+for my $var (sort keys (%env))
+  {
+    $fh->printf ("export %s=\"%s\"\n", $var, $env{$var});
+  }
+
+my @mpirun = &getMPICommand ();
+
+for (@mpirun)
+  {
+    $_ = './' . &basename ($_) if (m,^$olddir,);
+  }
+
+$fh->printf (<< "EOF");
+
+ls -l 
+
+@mpirun
+
+ls -l 
+
+EOF
+
+$fh->close ();
+
+&fixLFI (olddir => $olddir, newdir => $newdir);
+
+chmod (0755, 'run.sh');
+
+system ("cp -alf * $newdir/");
+
+symlink ($newdir, $davdir)
+  if (-d $opts{path});
+
+exit (0);
+
+
+
+
