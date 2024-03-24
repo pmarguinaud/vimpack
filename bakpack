@@ -118,6 +118,7 @@ use lib do
 
 use bt;
 
+my $HOME = (getpwuid ($>))[7];
 
 sub command
 {
@@ -144,15 +145,14 @@ sub listing
   $pack = 'File::Spec'->rel2abs ($pack);
 
   my @pwuid = getpwuid ($>); 
-  my $home = $pwuid[7];
 
 
-  my $p = index ($pack, $home) == 0 
-        ? 'File::Spec'->abs2rel ($pack, $home) 
+  my $p = index ($pack, $HOME) == 0 
+        ? 'File::Spec'->abs2rel ($pack, $HOME) 
         : &basename ($pack);
 
 
-  my $lst = "$home/.bakpack/$p.lst";
+  my $lst = "$HOME/.bakpack/$p.lst";
 
   &mkpath (&dirname ($lst));
 
@@ -240,7 +240,7 @@ sub restore
   my %opts = @_;
 
   (my $pack = $opts{pack}) or die;
-  my $dir = $ENV{HOMEPACK} || "$ENV{HOME}/pack";
+  my $dir = $ENV{HOMEPACK} || "$HOME/pack";
 
   my $tar = 'File::Spec'->canonpath (join ('/', $opts{scratchdir}, "$pack.tar"));
   my $uri = 'URI'->new ($opts{remote} . "/$pack.tar");

@@ -126,6 +126,8 @@ use FindBin qw ($Bin);
 use lib "$Bin/lib";
 use bt;
 
+my $HOME = (getpwuid ($>))[7];
+
 sub runCommand
 {
   my %args = @_;
@@ -144,7 +146,7 @@ sub davaiRunCommand
 
   print "@cmd\n" if ($args{verbose});
 
-  my $profile = "$ENV{HOME}/.davai_profile";
+  my $profile = "$HOME/.davai_profile";
   die unless (-f $profile);
 
   my $out = `set -e ; source $profile > /dev/null 2>&1; @cmd`;

@@ -36,6 +36,8 @@ use File::Spec;
 use File::Copy;
 use File::stat;
 
+my $HOME = (getpwuid ($>))[7];
+
 sub ddev
 {
   my ($d1, $d2) = @_;
@@ -51,7 +53,7 @@ sub ddev
 
 }
 
-my $dir = &tempdir (CLEANUP => 1, DIR => "$ENV{HOME}/tmp");
+my $dir = &tempdir (CLEANUP => 1, DIR => "$HOME/tmp");
 
 my $local = "$dir/src/local";
 

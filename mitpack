@@ -232,6 +232,7 @@ use FindBin qw ($Bin);
 use lib "$Bin/lib";
 use bt;
 
+my $HOME = (getpwuid ($>))[7];
 
 sub center
 {
@@ -245,7 +246,7 @@ sub center
   return $s; 
 }
 
-my $MITRAILLE = "$ENV{HOME}/mitraille";
+my $MITRAILLE = "$HOME/mitraille";
 
 sub runCommand
 {
@@ -280,7 +281,7 @@ sub runMitrailleCommand
 
   print "@cmd\n" if ($args{verbose});
 
-  my $profile = "$ENV{HOME}/.mitraille_profile";
+  my $profile = "$HOME/.mitraille_profile";
 
   die ("`$profile' was not found\n") unless (-f $profile);
 
