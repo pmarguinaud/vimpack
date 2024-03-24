@@ -97,6 +97,7 @@ use File::Spec;
 use File::Basename;
 use File::Temp;
 use File::Path;
+use File::Find;
 use Cwd;
 use FileHandle;
 use FindBin qw ($Bin);
@@ -133,6 +134,35 @@ sub commandPack
   chdir ($cwd);
 }
 
+sub listing
+{
+  my $class = shift;
+  my %opts = @_;
+
+  my $pack = $opts{pack};
+
+  $pack = 'File::Spec'->rel2abs ($pack);
+
+  my @pwuid = getpwuid ($>); 
+  my $home = $pwuid[7];
+
+
+  my $p = index ($pack, $home) == 0 
+        ? 'File::Spec'->abs2rel ($pack, $home) 
+        : &basename ($pack);
+
+
+  my $lst = "$home/.bakpack/$p.lst";
+
+  &mkpath (&dirname ($lst));
+
+  my $fh = 'FileHandle'->new (">$lst");
+
+  &find ({wanted => sub { $fh->print ("$File::Find::name\n") }, no_chdir => 1}, $pack);
+
+  $fh->close ();
+}
+
 sub archive
 {
   my $class = shift;
@@ -141,6 +171,11 @@ sub archive
   if ((! $opts{pack}) && (-f '.gmkview'))
     {
       $opts{pack} = &cwd ();
+    }
+
+  if ($opts{listing})
+    {
+      $class->listing (%opts);
     }
 
   for my $command (qw (clean reset lock))
@@ -251,7 +286,7 @@ my %opts =
 );
 
 my @opts_s = qw (pack remote scratchdir);
-my @opts_f = qw (recursive clean reset lock remove verbose);
+my @opts_f = qw (recursive clean reset lock remove verbose listing);
 
 my $method = shift;
 
