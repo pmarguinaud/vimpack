@@ -7,8 +7,14 @@ use File::stat;
 use File::Find;
 use File::Spec;
 use File::Copy;
+use File::Basename;
 use Getopt::Long;
 use Data::Dumper;
+use FindBin qw ($Bin);
+
+use lib "$Bin/lib";
+
+use bt;
 
 
 sub runCommand
@@ -27,6 +33,11 @@ sub runCommand
 
   my $c = system (@cmd);
 
+  if (my $eh = $args{errorHandler})
+    {
+      $c = $eh->(@cmd);
+    }
+
   chdir ($cwd);
 
   $c and die ("Command `@cmd' failed\n");
@@ -42,16 +53,23 @@ sub gitpackRunCommand
 
   my @cmd = @{ ${args}{command} };
 
-  print "@cmd\n" if ($args{verbose});
+  print "cwd=" . &cwd () . "\n@cmd\n" if ($args{verbose});
 
   my $out = `@cmd`;
+  my $c = $?;
+
+  if ($c)
+    {
+      if (my $eh = $args{errorHandler})
+        {
+          $c = $eh->(@cmd);
+        }
+    }
 
   chdir ($cwd);
 
-  if (my $c = $?)
-    {
-      die ("Gitpack command `@cmd' failed\n");
-    }
+  die ("Gitpack command `@cmd' failed\n")
+    if ($c);
 
   return $out;
 }
@@ -77,8 +95,6 @@ sub needReBuild
     my $st = stat ($f);
     $rebuild ||= $st->mtime () > $t0;
   }, no_chdir => 1}, "$pack/src/local/");
-
-  print "pack=$pack, rebuild=$rebuild\n";
 
   return $rebuild;
 }
@@ -140,6 +156,12 @@ sub getBranch
   return $branch;
 }
 
+sub getStatus
+{
+  my $status = &gitpackRunCommand (@_, command => [qw (gitpack status --porcelain)]);
+  return $status;
+}
+
 sub getCommit
 {
   chomp (my $commit = &gitpackRunCommand (@_, command => [qw (gitpack rev-parse HEAD)]));
@@ -177,6 +199,13 @@ if (-f '.synpack.conf')
   (map { ("$_=s", \$opts{$_}) } @opts_s),
 );
 
+if ($opts{help})
+  {
+    print "Usage: " . &basename ($0) . "\n" 
+        . " Options:\n" . join ('', map { "   --$_\n" } @opts_f, @opts_s);
+    exit (0);
+  }
+
 my $pack0 = 'File::Spec'->rel2abs ($opts{pack0});
 my $pack1 = 'File::Spec'->rel2abs ($opts{pack1});
 
@@ -188,16 +217,51 @@ for my $opt (qw (pack0 pack1))
 
 &rebuildIfNeeded (%opts, pack => $pack0);
 
-&gitpackRunCommand (%opts, pack => $pack0, command => [qw (gitpack commit -a), -m => $opts{message}]);
+
+if (&getStatus (%opts, pack => $pack0))
+  {
+    &gitpackRunCommand (%opts, pack => $pack0, command => [qw (gitpack commit -a), -m => $opts{message}]);
+  }
 
 my $branch0 = &getBranch (pack => $pack0);
-my $branch1 = &getBranch (pack => $pack1);
 
-die unless ($branch0 eq $branch1);
+# my $branch1 = &getBranch (pack => $pack1);
+# die unless ($branch0 eq $branch1);
 
 # &syncLocal (pack0 => $pack0, pack1 => $pack1);
 
-&gitpackRunCommand (%opts, pack => $pack1, command => [qw (gitpack pull), "$pack0/.gitpack/git", $branch0]);
 
-&rebuildIfNeeded (%opts, pack => $pack1);
+&gitpackRunCommand 
+  (%opts, pack => $pack1, command => [qw (gitpack pull), "$pack0/.gitpack/git", $branch0], errorHandler => sub
+{
+  my @cmd = @_;
+  'FileHandle'->new ('>cmd.sh')->print (<< "EOF");
+#!/bin/bash
+
+@cmd
+
+EOF
+
+  chmod (0755, 'cmd.sh');
+  system (qw (bash -i -c), 'echo MERGE FAILED; cat cmd.sh');
+
+  return 0;
+});
+
+&rebuildIfNeeded (%opts, pack => $pack1, errorHandler => sub
+{
+  my @cmd = @_;
+  'FileHandle'->new ('>cmd.sh')->print (<< "EOF");
+#!/bin/bash
+
+@cmd
+
+EOF
+
+  chmod (0755, 'cmd.sh');
+  system (qw (bash -i -c), 'echo COMMAND FAILED; cat cmd.sh');
+
+
+  return 0;
+});
 
