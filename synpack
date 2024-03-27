@@ -230,20 +230,40 @@ my $branch0 = &getBranch (pack => $pack0);
 
 # &syncLocal (pack0 => $pack0, pack1 => $pack1);
 
+my $BASHRC = << 'EOF';
+
+if [ -f ~/.bashrc ]
+then
+  . ~/.bashrc
+fi
+
+if [ -f ~/.bash_profile ]
+then
+  . ~/.bash_profile
+fi
+
+pwd
+
+EOF
+
 
 &gitpackRunCommand 
   (%opts, pack => $pack1, command => [qw (gitpack pull), "$pack0/.gitpack/git", $branch0], errorHandler => sub
 {
   my @cmd = @_;
-  'FileHandle'->new ('>cmd.sh')->print (<< "EOF");
-#!/bin/bash
 
-@cmd
+  'FileHandle'->new ('>.synpack.sh')->print (<< "EOF");
+
+$BASHRC
+
+export PS1="MERGE> "
+
+gitpack status
 
 EOF
 
   chmod (0755, 'cmd.sh');
-  system (qw (bash -i -c), 'echo MERGE FAILED; cat cmd.sh');
+  system (qw (bash -i --init-file ./.synpack.sh));
 
   return 0;
 });
@@ -251,16 +271,17 @@ EOF
 &rebuildIfNeeded (%opts, pack => $pack1, errorHandler => sub
 {
   my @cmd = @_;
-  'FileHandle'->new ('>cmd.sh')->print (<< "EOF");
-#!/bin/bash
 
-@cmd
+  'FileHandle'->new ('>.synpack.sh')->print (<< "EOF");
+
+$BASHRC
+
+export PS1="BUILD> "
 
 EOF
 
   chmod (0755, 'cmd.sh');
-  system (qw (bash -i -c), 'echo COMMAND FAILED; cat cmd.sh');
-
+  system (qw (bash -i --init-file ./.synpack.sh));
 
   return 0;
 });
