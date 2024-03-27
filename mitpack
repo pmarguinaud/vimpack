@@ -348,7 +348,9 @@ sub generateProFile
 
   my @list = do 
   { 
-    my $fh = 'FileHandle'->new ("<$MITRAILLE/PRO_FILE.$args{version}"); 
+    my $pro_file = "$MITRAILLE/PRO_FILE.$args{version}";
+    my $fh = 'FileHandle'->new ("<$pro_file"); 
+    $fh or die ("Cannot open `$pro_file'");
     <$fh>
   };
 
@@ -407,6 +409,8 @@ sub createMitrailletteTestCase
     {
       &patchCJob ($cjob);
     }
+
+  'FileHandle'->new (">$mitraillette/VERSION")->print ("$args{version}\n");
 
   return $mitraillette;
 }
@@ -656,7 +660,7 @@ sub showStatus
 sub statusEquiv
 {
   my ($status1, $status2) = @_;
-  return (($status1 eq 'COMPLETED') == ($status2 eq 'COMPLETED'));
+  return (($status1 eq 'COMPLETED') == ($status2 eq 'COMPLETED')) || ($status1 eq 'UNKNOWN') || ($status2 eq 'UNKNOWN');
 }
 
 sub getLastMitraillette
@@ -697,8 +701,6 @@ if ($opts{help})
     exit (0);
   }
 
-die ("No version of tests was found\n") 
-  unless ($opts{version});
 die ("Start mitpack from within a pack\n") 
   unless (-f '.genesis');
 
@@ -718,6 +720,8 @@ if ($opts{reuse})
   }
 else
   {
+    die ("No version of tests was found\n") 
+      unless ($opts{version});
     $mitraillette = &createMitrailletteTestCase (pack => $pack, %opts);
     my $local = "$pack/" . &basename ($mitraillette);
     symlink ($mitraillette, $local);
