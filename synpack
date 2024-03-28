@@ -1,5 +1,64 @@
 #!/usr/bin/perl -w
 
+=head1 NAME
+
+synpack
+
+=head1 SYNOPSIS
+
+  # Modify the code
+  [ECA 49t1_test1.03.IMPIIFC2018.x]$ vimpack stepo.F90                                
+  # Merge modifications in another pack
+  [ECA 49t1_test1.03.IMPIIFC2018.x]$ synpack --pack1 ../49t1_test2.03.IMPIIFC2018.x     
+
+=head1 DESCRIPTION
+
+When invoked, C<synpack> will do the following:
+
+=over 4
+
+=item 1
+
+Attempt to compile the code in the current pack, if C<MASTERODB> is not up-to-date.
+
+=item 2
+
+Commit the last changes with the message passed with the C<--message> option.
+
+=item 3
+
+Try to merge the current branch into the pack passed with C<--pack1> option.
+
+=item 4
+
+Try to compile C<MASTERODB> in the passed with C<--pack1> option.
+
+=back
+
+If step 3 or 4 fails, an interactive shell will be created and the user will be expected to :
+
+=over 4
+
+=item
+
+If step 3 has failed, finish the merge by hand and commit the last modifications in pack1.
+
+=item
+
+If step 4 has failed, fix the code and commit the last modifications in pack1.
+
+=back
+
+=head1 SEE ALSO
+
+C<gmkpack>, C<gitpack>, C<vimpack>
+
+=head1 AUTHOR
+
+pmarguinaud@hotmail.com
+
+=cut
+
 use strict;
 use FileHandle;
 use Cwd;

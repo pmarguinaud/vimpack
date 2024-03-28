@@ -9,7 +9,7 @@ davpack
     $ davpack                                   # Create & run new test case
     $ davpack --reuse                           # Rerun last test case
     $ davpack --status                          # See status of last test tasks
-    $ davpack --cancel                           #  Cancel already submitted tasks
+    $ davpack --cancel                          # Cancel already submitted tasks
 
 # DESCRIPTION
 

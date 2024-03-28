@@ -22,6 +22,7 @@ vimpack options :
 
     vimpack 
       -d    Open vimdiff (difference with base pack and current pack)
+      -s    Ignore whitespace in diff mode
       -i    Create index and exits
       -g    Use GUI vim
       -b    Open a backtrace
