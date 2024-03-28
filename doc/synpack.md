@@ -11,6 +11,10 @@ synpack
 
 # DESCRIPTION
 
+Report modifications from one pack into another, using `gitpack`.
+
+# PRINCIPLES
+
 When invoked, `synpack` will do the following:
 
 1. Attempt to compile the code in the current pack, if `MASTERODB` is not up-to-date.

@@ -13,6 +13,10 @@ synpack
 
 =head1 DESCRIPTION
 
+Report modifications from one pack into another, using C<gitpack>.
+
+=head1 PRINCIPLES
+
 When invoked, C<synpack> will do the following:
 
 =over 4
