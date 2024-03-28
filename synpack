@@ -10,6 +10,7 @@ use File::Copy;
 use File::Basename;
 use Getopt::Long;
 use Data::Dumper;
+use Term::ANSIColor;
 use FindBin qw ($Bin);
 
 use lib "$Bin/lib";
@@ -33,7 +34,7 @@ sub runCommand
 
   my $c = system (@cmd);
 
-  if (my $eh = $args{errorHandler})
+  if ($c && (my $eh = $args{errorHandler}))
     {
       $c = $eh->(@cmd);
     }
@@ -58,12 +59,9 @@ sub gitpackRunCommand
   my $out = `@cmd`;
   my $c = $?;
 
-  if ($c)
+  if ($c && (my $eh = $args{errorHandler}))
     {
-      if (my $eh = $args{errorHandler})
-        {
-          $c = $eh->(@cmd);
-        }
+      $c = $eh->(@cmd);
     }
 
   chdir ($cwd);
@@ -114,41 +112,6 @@ sub filesEqual
   return &slurp ($f0) eq &slurp ($f1);
 }
 
-
-=pod
-
-sub syncLocal
-{
-  my %args = @_;
-
-  my ($pack0, $pack1) = @args{qw (pack0 pack1)};
-  
-
-  &find ({wanted => sub 
-  {  
-    my $f = $File::Find::name;
-    return unless ((-f $f) && ($f =~ m/\.F90$/o));
-    $f = 'File::Spec'->abs2rel ($f, "$pack1/src/local/");
-    
-    print "$f\n";
-
-    my $f0 = "$pack0/src/local/$f";
-    my $f1 = "$pack1/src/local/$f";
-
-    return if (&filesEqual ($f0, $f1));
-
-    unlink ($f1);
-
-    print "$f0 -> $f1\n";
-
-    &copy ($f0, $f1);
-
-  }, no_chdir => 1}, "$pack1/src/local/");
-
-
-}
-
-=cut
 
 sub getBranch
 {
@@ -225,11 +188,6 @@ if (&getStatus (%opts, pack => $pack0))
 
 my $branch0 = &getBranch (pack => $pack0);
 
-# my $branch1 = &getBranch (pack => $pack1);
-# die unless ($branch0 eq $branch1);
-
-# &syncLocal (pack0 => $pack0, pack1 => $pack1);
-
 my $BASHRC = << 'EOF';
 
 if [ -f ~/.bashrc ]
@@ -252,18 +210,20 @@ EOF
 {
   my @cmd = @_;
 
+  my $MERGE = &colored ('[MERGE]', 'black on_cyan');
+
   'FileHandle'->new ('>.synpack.sh')->print (<< "EOF");
 
 $BASHRC
 
-export PS1="MERGE> "
+export PS1="$MERGE-$ENV{PS1}"
 
 gitpack status
 
 EOF
 
   chmod (0755, 'cmd.sh');
-  system (qw (bash -i --init-file ./.synpack.sh));
+  system (qw (bash --init-file ./.synpack.sh -i));
 
   return 0;
 });
@@ -272,16 +232,18 @@ EOF
 {
   my @cmd = @_;
 
+  my $BUILD = &colored ('[BUILD]', 'black on_cyan');
+
   'FileHandle'->new ('>.synpack.sh')->print (<< "EOF");
 
 $BASHRC
 
-export PS1="BUILD> "
+export PS1="$BUILD-$ENV{PS1}"
 
 EOF
 
   chmod (0755, 'cmd.sh');
-  system (qw (bash -i --init-file ./.synpack.sh));
+  system (qw (bash --init-file ./.synpack.sh -i));
 
   return 0;
 });
