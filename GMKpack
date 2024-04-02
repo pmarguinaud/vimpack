@@ -1,0 +1,183 @@
+#!/usr/bin/perl -w
+
+use strict;
+use Data::Dumper;
+use FindBin qw ($Bin);
+use File::Spec;
+use File::Basename;
+use FileHandle;
+use lib "$Bin/lib";
+
+use bt;
+
+sub run
+{
+  my %args = @_;
+
+  my @cmd = @{ $args{cmd} };
+
+  if ($args{stdeo})
+    {
+      my $out = `@cmd 2>&1`; 
+      my $c = $!;
+     
+      print $out;
+     
+      if ($c)
+        {
+           die ("Command `@cmd' failed\n");
+        }
+     
+      return $out;
+    }
+  else
+    {
+      system (@cmd)
+        and die ("Command `@cmd' failed\n");
+    }
+}
+
+sub createPack
+{
+  my @argv = @_;
+  my $gmkpack = &getGmkpack ();
+  my $out = &run (cmd => [$gmkpack, @argv], stdeo => 1);
+  my ($pack) = ($out =~ m/Creating pack (\S+) /goms);
+  unless ($pack)
+    {
+      my ($ics) = ($out =~ m/copy compilation and load script on (\S+)/goms);
+      $pack = &dirname ($ics);
+    }
+  return $pack;
+}
+
+sub getGmkpack
+{
+  my @PATH = split (m/:/o, $ENV{PATH});
+
+  my $GMKpack = 'File::Spec'->rel2abs ($0);
+
+  for my $PATH (@PATH)
+    {
+      my $gmkpack = "$PATH/gmkpack";
+      if ((-f $gmkpack) && ($gmkpack ne $GMKpack))
+        {
+          return $gmkpack;
+        }
+    }
+ 
+  die ('gmkpack was not found');
+}
+
+sub getoptsSimple
+{
+  my %args = @_;
+
+  my @argv   = @{ $args{argv}   };
+  my @opts_s = @{ $args{opts_s} };
+  my @opts_f = @{ $args{opts_f} };
+
+  my %opts;
+
+  my @argl;
+  
+  for (my $i = 0; $i <= $#argv; $i++)
+    {
+      my $opt;
+      if ($argv[$i] =~ m/^-([a-z])$/o)
+        {
+          $opt = $1;
+        }
+      elsif ($argv[$i] =~ m/^--?([a-z][a-z]+)$/o)
+        {
+          $opt = $1;
+        }
+      if ($opt && grep ({ $opt eq $_ } @opts_s))
+        {
+          if ($i <= $#argv)
+            {
+              $opts{$opt} = $argv[$i+1];
+              $i++;
+            }
+        }
+      elsif ($opt && grep ({ $opt eq $_ } @opts_f))
+        {
+          $opts{$opt} = 1;
+        }
+      else
+        {
+          push @argl, $argv[$i];
+        }
+    }
+
+  if ($args{filter})
+    {
+      @{ $args{argv} } = @argl;
+    }
+
+  return %opts;
+}
+
+my @argv = @ARGV;
+
+my %o    = &getoptsSimple 
+(
+  argv   => \@argv, 
+  opts_s => ['r', 'b', 'u'], 
+  opts_f => ['a'],
+);
+
+my %opts = &getoptsSimple 
+(
+  argv   => \@argv, 
+  opts_s => ['repository'],  
+  opts_f => [qw (super novim nogit nobuild)], 
+  filter => 1,
+);
+
+die unless ($o{r});
+die unless (($o{b} && $o{a}) || ($o{b} && $o{u}));
+
+for my $opt (qw (novim nobuild))
+  {
+    $opts{$opt} ||= $o{a};
+  }
+
+my $pack = &createPack (@argv);
+
+if ($opts{super})
+  {
+    chdir ($pack);
+    
+    unless ($opts{nogit})
+      {
+        if ($opts{repository})
+          {
+            my $branch = "$o{r}_$o{b}";
+            &run (cmd => ['gitpack', '--init', '--repository', $opts{repository}, '--branch', $branch]);
+          }
+        else
+          {
+            my $branch = "$o{r}_$o{u}";
+            &run (cmd => ['gitpack', '--init']);
+            &run (cmd => ['gitpack', 'branch', $branch]);
+            &run (cmd => ['gitpack', 'checkout', $branch]);
+          }
+      }
+
+    unless ($opts{novim} or $o{a})
+      {
+        &run (cmd => ['vimpack', '-i']);
+      }
+    
+    unless ($o{a} || $opts{nobuild})
+      {
+        for my $ics (<./ics_*>)
+          {
+            my $script = do { my $fh = 'FileHandle'->new ("<$ics"); local $/ = undef; <$fh> };
+            $script =~ s/GMK_THREADS=\d+/GMK_THREADS=16/goms;
+            'FileHandle'->new (">$ics")->print ($script);
+            &run (cmd => [$ics]);
+          }
+      }
+  }
