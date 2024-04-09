@@ -37,6 +37,23 @@ sub run
     }
 }
 
+sub getGenesis
+{
+  chomp (my $genesis = &slurp ('.genesis'));
+  my @genesis = split (m/\s+/o, $genesis);
+  return @genesis;
+}
+
+sub slurp
+{
+  my $f = shift;
+  my $fh = 'FileHandle'->new ("<$f"); 
+  die ("Could not open `$f' for reading\n") unless ($fh);
+  local $/ =  undef; 
+  my $text = <$fh>;
+  return $text;
+}
+
 sub createPack
 {
   my @argv = @_;
@@ -46,7 +63,7 @@ sub createPack
   unless ($pack)
     {
       my ($ics) = ($out =~ m/copy compilation and load script on (\S+)/goms);
-      $pack = &dirname ($ics);
+      $pack = &dirname ($ics) if ($ics);
     }
   return $pack;
 }
@@ -123,7 +140,7 @@ my @argv = @ARGV;
 my %o    = &getoptsSimple 
 (
   argv   => \@argv, 
-  opts_s => ['r', 'b', 'u'], 
+  opts_s => [qw (r b u l o p)], 
   opts_f => ['a'],
 );
 
@@ -134,6 +151,45 @@ my %opts = &getoptsSimple
   opts_f => [qw (super novim nogit nobuild)], 
   filter => 1,
 );
+
+
+# Create derived pack
+
+if (-f '.genesis')
+  {
+    my @genesis = &getGenesis ();
+
+    my %g = &getoptsSimple 
+    (
+      argv   => \@genesis,
+      opts_s => [qw (r b u l o p)], 
+      opts_f => ['a'],
+    );
+
+    for my $opt (qw (r l o p))
+      {
+        unless (exists $o{$opt})
+          {
+            $o{$opt} = $g{$opt};
+            push (@argv, "-$opt" => $o{$opt});
+          }
+      }
+      
+    unless ($o{b})
+      {
+        if ($g{a} )
+          {
+            $o{b} = $g{b};
+          }
+        else
+          {
+            $o{b} = $g{u};
+          }
+        push (@argv, -b => $o{b});
+      }
+   
+  }
+
 
 die unless ($o{r});
 die unless (($o{b} && $o{a}) || ($o{b} && $o{u}));
