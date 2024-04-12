@@ -4,6 +4,7 @@ use strict;
 use Data::Dumper;
 use FindBin qw ($Bin);
 use File::Spec;
+use File::Path;
 use File::Basename;
 use FileHandle;
 use lib "$Bin/lib";
@@ -147,7 +148,7 @@ my %o    = &getoptsSimple
 my %opts = &getoptsSimple 
 (
   argv   => \@argv, 
-  opts_s => ['repository'],  
+  opts_s => ['repository', 'file'],  
   opts_f => [qw (super novim nogit nobuild)], 
   filter => 1,
 );
@@ -201,39 +202,43 @@ for my $opt (qw (novim nobuild))
 
 my $pack = &createPack (@argv);
 
-if ($opts{super})
-  {
-    chdir ($pack);
-    
-    unless ($opts{nogit})
-      {
-        if ($opts{repository})
-          {
-            my $branch = "$o{r}_$o{b}";
-            &run (cmd => ['gitpack', '--init', '--repository', $opts{repository}, '--branch', $branch]);
-          }
-        else
-          {
-            my $branch = "$o{r}_$o{u}";
-            &run (cmd => ['gitpack', '--init']);
-            &run (cmd => ['gitpack', 'branch', $branch]);
-            &run (cmd => ['gitpack', 'checkout', $branch]);
-          }
-      }
+chdir ($pack);
 
-    unless ($opts{novim} or $o{a})
+unless ($opts{nogit})
+  {
+    if ($opts{repository})
       {
-        &run (cmd => ['vimpack', '-i']);
+        my $branch = "$o{r}_$o{b}";
+        &run (cmd => ['gitpack', '--init', '--repository', $opts{repository}, '--branch', $branch]);
       }
-    
-    unless ($o{a} || $opts{nobuild})
+    else
       {
-        for my $ics (<./ics_*>)
-          {
-            my $script = do { my $fh = 'FileHandle'->new ("<$ics"); local $/ = undef; <$fh> };
-            $script =~ s/GMK_THREADS=\d+/GMK_THREADS=16/goms;
-            'FileHandle'->new (">$ics")->print ($script);
-            &run (cmd => [$ics]);
-          }
+        my $branch = "$o{r}_$o{u}";
+        &run (cmd => ['gitpack', '--init']);
+        &run (cmd => ['gitpack', 'branch', $branch]);
+        &run (cmd => ['gitpack', 'checkout', $branch]);
       }
   }
+
+unless ($opts{novim} or $o{a})
+  {
+    &run (cmd => ['vimpack', '-i']);
+  }
+
+for my $ics (<./ics_*>)
+  {
+    my $script = do { my $fh = 'FileHandle'->new ("<$ics"); local $/ = undef; <$fh> };
+    $script =~ s/GMK_THREADS=\d+/GMK_THREADS=16/goms;
+    'FileHandle'->new (">$ics")->print ($script);
+    &run (cmd => [$ics])
+      unless ($o{a} || $opts{nobuild});
+  }
+
+if (my $f = $opts{file})
+  {
+    &mkpath (&dirname ($f));
+    'FileHandle'->new (">$f")->print ("$pack\n");
+  }
+
+
+
