@@ -427,6 +427,7 @@ sub getVersion
   (
     '49t0' => 'DV49T0',
     '49t1' => 'DV49T1',
+    '49t2' => 'DV49T2',
   );
 
   my $cycle = &getCycle ();
@@ -587,7 +588,7 @@ sub showStatus
 }
 
 my %opts = (version => &getVersion ());
-my @opts_f = qw (verbose dryrun help reuse status cancel dumper);
+my @opts_f = qw (verbose dryrun help reuse status cancel dumper versions);
 my @opts_s = qw (version);
 
 sub help
@@ -608,6 +609,12 @@ $opts{reuse} ||= $opts{cancel};
 if ($opts{help})
   {
     &help (); 
+    exit (0);
+  }
+
+if ($opts{versions})
+  {
+    &runCommand (command => [qw (git ls-remote --tags https://github.com/ACCORD-NWP/DAVAI-tests.git)]);
     exit (0);
   }
 
