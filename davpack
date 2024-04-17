@@ -444,7 +444,7 @@ sub checkGmkpack
       goto FOUND if (-f $gmkpack && -x $gmkpack);
     }
 
-  die "gmkpack was not found in $ENV{PATH}";
+  die ("gmkpack was not found in:\n" . join ("\n   ", '', @PATH, '', ''));
   
 FOUND:
 
@@ -493,13 +493,15 @@ sub cancelDavai
 
   my $conf = &getConf (nrv => $nrv);
   
-  my $dir = &getMtoolRoot (conf => $conf) . '/summaries_stack';
+  my $dir = &getMtoolRoot (conf => $conf);
 
-  my @task = sort &uniq (map { &basename ($_, qw (.itself.json)) } <$dir/*.itself.json>);
+  my $summaries_stack = "$dir/summaries_stack";
+
+  my @task = sort &uniq (map { &basename ($_, qw (.itself.json)) } <$summaries_stack/*.itself.json>);
 
   for my $task (@task)
     {
-      my $f = "$dir/$task.itself.json";
+      my $f = "$summaries_stack/$task.itself.json";
       my $x = &JSON::decode_json (&slurp ($f));
 
       my $MTOOL_STEP_DEPOT = $x->{Context}{MTOOL_STEP_DEPOT};
@@ -525,8 +527,15 @@ sub cancelDavai
         {
           &runCommand (command => ['scancel', $id], %args);
         }
+
+      unlink ($f);
     }
   
+  for my $d (<$dir/*>)
+    {
+      next if (&basename ($d) eq 'summaries_stack');
+      &rmtree ($d);
+    }
 }
 
 sub showStatus
@@ -543,44 +552,59 @@ sub showStatus
   my @suff = qw (.itself.json .consistency.json .continuity.json);
   my @task = sort &uniq (map { &basename ($_, @suff) } <$dir/*.json>);
 
+  return unless (@task);
+
   my $len = &max (map { length ($_) } @task);
   
 
-  printf (" | %-${len}s ", "");
+  printf ("| %-${len}s ", "");
   for my $suff (@suff)
     {
       (my $s = $suff) =~ s/(?:^\.|\.json$)//go;
       printf (" | %20s ", &center ($s, 20));
     }
-  printf (" | \n");
+  printf ("| \n");
 
-  for my $task (@task)
+
+  for my $i (0 .. $#task)
     {
-      printf (" | %-${len}s ", $task);
+      my $task = $task[$i];
+      my $line = '';
+
+      $line .= sprintf ("| %-${len}s ", $task);
+
       for my $suff (@suff)
         {
           my $f = "$dir/$task$suff";
           unless (-f $f)
             {
-              printf (" | %20s ", "");
+              $line .= sprintf (" | %20s ", "");
               next;
             }
           my $x = &JSON::decode_json (&slurp ($f));
-#         print &Dumper ($x);
+
           if (my $status = $x->{comparisonStatus}{symbol} || $x->{Status}{symbol})
             {
               my $st = stat ($f);
               my $dt = strftime ('%Y-%m-%d %H:%M:%S', localtime ($st->mtime ()));
-#             printf (" %s | ", $dt);
-              printf (" | %20s ", &colorStatus (&center ($status, 20)));
+              $line .= sprintf (" | %20s ", &colorStatus (&center ($status, 20)));
             }
           else
             {
-              printf (" | %20s ", "");
+              $line .= sprintf (" | %20s ", "");
             }
         }
-      printf (" | \n");
+
+      $line .= sprintf ("|\n");
+
+      if ($i % 4 == 0)
+        {
+          $line =~ s/ /./go;
+        }
+
+      print $line;
     }
+
 
 # {Listings}{"Compare listings at uri(s)"}{ref}
 # {Listings}{"Compare listings at uri(s)"}{test}
@@ -689,7 +713,7 @@ my $nrv = 'File::Spec'->rel2abs ("$dv/davai/nrv");
 
 my @pack = &getPacks (pack => &cwd (), nrv => $nrv);
 
-unless ($opts{dryrun} || $opts{status})
+unless ($opts{dryrun} || $opts{status} || $opts{cancel})
   {
     # Check all pack are at the same commit
 
