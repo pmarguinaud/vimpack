@@ -484,9 +484,24 @@ sub runMitrailletteTestCase
       rename ($_, "old/$_") for (@o);
     }
 
-  for my $cjob (<*.cjob>)
+  if (my @filter = @{ $args{filter} })
     {
-      &submitJob (%args, job => $cjob);
+      for my $cjob (<*.cjob>)
+        { 
+          my $ok = 0;
+          for (@filter)
+            {
+              $ok ||= ($cjob =~ m/$_/);
+            }
+          &submitJob (%args, job => $cjob) if ($ok);
+        }
+    }
+  else
+    {
+      for my $cjob (<*.cjob>)
+        {
+          &submitJob (%args, job => $cjob);
+        }
     }
 
 }
@@ -538,6 +553,24 @@ sub colorStatus
     {
       return $text;
     }
+}
+
+sub listTestCases
+{
+  my %args = @_;
+
+  (my $pack = $args{pack}) or die;
+
+  my $mitraillette = $args{mitraillette};
+
+  $mitraillette or die;
+  chdir ($mitraillette) or die;
+
+  for my $cjob (<*.cjob>)
+    {
+      print &basename ($cjob, qw (.cjob)), "\n";
+    }
+
 }
 
 sub showStatus
@@ -675,9 +708,9 @@ sub getLastMitraillette
   return pop (@mitraillette);
 }
 
-my %opts = (version => &getVersion ());
-my @opts_f = qw (verbose help reuse dryrun status status-edit-diff cancel);
-my @opts_s = qw (version reference);
+my %opts = (version => &getVersion (), filter => '');
+my @opts_f = qw (verbose help reuse dryrun status status-edit-diff cancel list);
+my @opts_s = qw (version reference filter);
 
 sub help
 {
@@ -711,8 +744,12 @@ my $mitraillette;
 
 $opts{reuse} ||= $opts{status};
 $opts{reuse} ||= $opts{cancel};
+$opts{reuse} ||= $opts{list};
+
 $opts{reference} = 'File::Spec'->rel2abs ($opts{reference})
   if ($opts{reference});
+
+$opts{filter} = [split (m/,/o, $opts{filter})];
 
 
 if ($opts{reuse})
@@ -729,7 +766,11 @@ else
     &swapLink ($local);
   }
 
-if ($opts{status})
+if ($opts{list})
+  {
+    &listTestCases (mitraillette => $mitraillette, pack => $pack, %opts);
+  }
+elsif ($opts{status})
   {
     &showStatus (mitraillette => $mitraillette, pack => $pack, %opts);
   }
