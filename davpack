@@ -151,6 +151,9 @@ sub davaiRunCommand
 
   my $out = `set -e ; source $profile > /dev/null 2>&1; @cmd`;
   my $c = $?;
+
+  print $out if ($args{verbose});
+
   $c && die ("Davai command `@cmd' failed\n");
 
   return $out;
@@ -534,7 +537,56 @@ sub cancelDavai
   for my $d (<$dir/*>)
     {
       next if (&basename ($d) eq 'summaries_stack');
+      next if (&basename ($d) =~ m/^pack2bin\./o);
       &rmtree ($d);
+    }
+}
+
+sub getTestCases
+{
+  my %args = @_;
+  my $nrv = $args{nrv};
+
+  my @list = split (m/\n/o, &davaiRunCommand (command => ['davai-run_tests', '-l'], %args));
+ 
+  return @list;
+}
+
+sub listTestCases
+{
+  my %args = @_;
+  my $nrv = $args{nrv};
+
+  my @list = &getTestCases (%args);
+
+  for (@list)
+    {
+      print "$_\n";
+    }
+}
+
+sub runTestCases
+{
+  my %args = @_;
+  my $nrv = $args{nrv};
+
+  if (my @filter = @{ $args{filter} })
+    {
+      my @list = &getTestCases (%args);
+      
+      for my $test (@list)
+        {
+          my $ok = 0;
+          for (@filter)
+            {
+              $ok ||= ($test =~ m/$_/);
+            }
+          &davaiRunCommand (command => ['davai-run_tests', $test], %args) if ($ok);
+        }
+    }
+  else
+    {
+      &davaiRunCommand (command => ['davai-run_tests'], %args);
     }
 }
 
@@ -611,9 +663,9 @@ sub showStatus
 
 }
 
-my %opts = (version => &getVersion ());
-my @opts_f = qw (verbose dryrun help reuse status cancel dumper versions);
-my @opts_s = qw (version);
+my %opts = (version => &getVersion (), filter => '');
+my @opts_f = qw (verbose dryrun help reuse status cancel dumper versions list);
+my @opts_s = qw (version filter);
 
 sub help
 {
@@ -629,12 +681,15 @@ sub help
 
 $opts{reuse} ||= $opts{status};
 $opts{reuse} ||= $opts{cancel};
+$opts{reuse} ||= $opts{list};
 
 if ($opts{help})
   {
     &help (); 
     exit (0);
   }
+
+$opts{filter} = [split (m/,/o, $opts{filter})];
 
 if ($opts{versions})
   {
@@ -713,7 +768,7 @@ my $nrv = 'File::Spec'->rel2abs ("$dv/davai/nrv");
 
 my @pack = &getPacks (pack => &cwd (), nrv => $nrv);
 
-unless ($opts{dryrun} || $opts{status} || $opts{cancel})
+unless ($opts{dryrun} || $opts{status} || $opts{cancel} || $opts{list})
   {
     # Check all pack are at the same commit
 
@@ -748,7 +803,11 @@ if (! $opts{reuse})
     &davaiRunCommand (command => ['davai-ciboulai_init'], %opts);
   }
 
-if ($opts{status})
+if ($opts{list})
+  {
+    &listTestCases (%opts, nrv => $nrv);
+  }
+elsif ($opts{status})
   {
     &showStatus (%opts, nrv => $nrv);
   }
@@ -758,7 +817,7 @@ elsif ($opts{cancel})
   }
 elsif (! $opts{'dryrun'})
   {
-    &davaiRunCommand (command => ['davai-run_tests'], %opts);
+    &runTestCases (%opts, nrv => $nrv);
   }
 
 

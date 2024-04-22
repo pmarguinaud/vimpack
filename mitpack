@@ -501,6 +501,7 @@ sub jobInfo
   $status =~ s/^forrtl:.*SIGSEGV/SIGSEGV/o if ($status);
 
   my ($CNMEXPL) = ($text =~ m/CNMEXPL=(\w+)/goms);
+  $CNMEXPL or die ($o);
 
   unless ($status)
     {
