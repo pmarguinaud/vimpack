@@ -70,6 +70,7 @@ use File::stat;
 use File::Find;
 use File::Spec;
 use File::Copy;
+use File::Path;
 use File::Basename;
 use Getopt::Long;
 use Data::Dumper;
@@ -107,7 +108,7 @@ sub runCommand
   $c and die ("Command `@cmd' failed\n");
 }
 
-sub gitpackRunCommand
+sub runGitPackCommand
 {
   my %args = @_; 
 
@@ -178,19 +179,19 @@ sub filesEqual
 
 sub getBranch
 {
-  chomp (my $branch = &gitpackRunCommand (@_, command => [qw (gitpack rev-parse --abbrev-ref HEAD)]));
+  chomp (my $branch = &runGitPackCommand (@_, command => [qw (gitpack rev-parse --abbrev-ref HEAD)]));
   return $branch;
 }
 
 sub getStatus
 {
-  my $status = &gitpackRunCommand (@_, command => [qw (gitpack status --porcelain)]);
+  my $status = &runGitPackCommand (@_, command => [qw (gitpack status --porcelain)]);
   return $status;
 }
 
 sub getCommit
 {
-  chomp (my $commit = &gitpackRunCommand (@_, command => [qw (gitpack rev-parse HEAD)]));
+  chomp (my $commit = &runGitPackCommand (@_, command => [qw (gitpack rev-parse HEAD)]));
   return $commit;
 }
 
@@ -205,13 +206,40 @@ sub rebuildIfNeeded
 
 my %opts = (qw (verbose 0 message Commit), pack0 => &cwd ());
 
-my @opts_f = qw (verbose help);
+my @opts_f = qw (up verbose help);
 my @opts_s = qw (message pack0 pack1);
 
 sub help
 {
   print "Usage: " . &basename ($0) . "\n" 
       . " Options:\n" . join ('', map { "   --$_\n" } @opts_f, @opts_s);
+}
+
+sub getView
+{
+  my %args = @_;
+
+  $args{local} = 1 unless (exists $args{local});
+
+  my $pack = $args{pack};
+
+  my @view = do { my $fh = 'FileHandle'->new ("<$pack/.gmkview"); <$fh> };
+  chomp for (@view);
+
+  my @pack = (shift (@view) => $pack);
+
+  unless ($args{local})
+    {
+      @pack = ();
+    }
+
+  for my $view (@view)
+    {
+      (my $link = readlink ("src/$view")) or die;
+      push @pack, $view, &dirname (&dirname ($link));
+    }
+
+  return @pack;
 }
 
 if (-f '.synpack.conf')
@@ -233,7 +261,17 @@ if ($opts{help})
   }
 
 my $pack0 = 'File::Spec'->rel2abs ($opts{pack0});
+
+my @view = &getView (pack => $pack0, local => 0);
+
+if ($opts{'up'})
+  {
+    $opts{pack1} = scalar (@view) ? $view[1] : undef;
+  }
+
 my $pack1 = 'File::Spec'->rel2abs ($opts{pack1});
+
+$opts{'up'} = scalar (@view) > 0 && ($view[1] eq $pack1) ? $view[0] : undef;
 
 for my $opt (qw (pack0 pack1))
   {
@@ -241,12 +279,25 @@ for my $opt (qw (pack0 pack1))
     die unless (-f "$opts{$opt}/.genesis");
   }
 
-&rebuildIfNeeded (%opts, pack => $pack0);
 
+sub PP
+{
+
+  print "\n" x 4;
+  print "@_\n" x 4;
+  print "\n" x 4;
+
+}
+
+
+&PP ("REBUILD $pack0");
+
+&rebuildIfNeeded (%opts, pack => $pack0);
 
 if (&getStatus (%opts, pack => $pack0))
   {
-    &gitpackRunCommand (%opts, pack => $pack0, command => [qw (gitpack commit -a), -m => $opts{message}]);
+    &PP ("COMMIT IN $pack0");
+    &runGitPackCommand (%opts, pack => $pack0, command => [qw (gitpack commit -a), -m => $opts{message}]);
   }
 
 my $branch0 = &getBranch (pack => $pack0);
@@ -267,8 +318,9 @@ pwd
 
 EOF
 
+&PP ("MERGE IN $pack1");
 
-&gitpackRunCommand 
+&runGitPackCommand 
   (%opts, pack => $pack1, command => [qw (gitpack pull), "$pack0/.gitpack/git", $branch0], errorHandler => sub
 {
   my @cmd = @_;
@@ -291,6 +343,9 @@ EOF
   return 0;
 });
 
+
+&PP ("REBUILD $pack1");
+
 &rebuildIfNeeded (%opts, pack => $pack1, errorHandler => sub
 {
   my @cmd = @_;
@@ -311,3 +366,23 @@ EOF
   return 0;
 });
 
+
+&PP ("UP");
+
+
+if (my $view1 = $opts{up})
+  {
+    &runCommand (command => ['cleanpack', '-f'], chdir => $pack0);
+    &runCommand (command => ['resetpack', '-f'], chdir => $pack0);
+    &runCommand (command => ['./ics_masterodb'], chdir => $pack0);
+
+    my $text = &slurp ("$pack1/src/.gmak/local.sds");
+    $text =~ s/'local'/'$view1'/gms;
+    'FileHandle'->new (">$pack0/src/.gmak/$view1.sds")->print ($text);
+
+    &runGitPackCommand (%opts, pack => $pack0, command => [qw (gitpack checkout -f -q), $branch0]);
+
+    &rmtree ("$pack0/.vimpack");
+    &runCommand (command => ['vimpack', '-i'], chdir => $pack0);
+
+  }
