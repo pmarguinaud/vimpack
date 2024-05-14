@@ -138,6 +138,8 @@ sub runGitPackCommand
 
 sub needReBuild
 {
+  # Returns true if MASTERODB is not up-to-date
+
   my %args = @_;
 
   my $pack = $args{pack} || &cwd ();
@@ -197,6 +199,8 @@ sub getCommit
 
 sub rebuildIfNeeded
 {
+  # Build MASTERODB if not up-to-date
+
   my %args = @_;
   my $pack = $args{pack} || &cwd ();
 
@@ -204,19 +208,10 @@ sub rebuildIfNeeded
     if (&needReBuild (pack => $pack));
 }
 
-my %opts = (qw (verbose 0 message Commit), pack0 => &cwd ());
-
-my @opts_f = qw (up verbose help);
-my @opts_s = qw (message pack0 pack1);
-
-sub help
-{
-  print "Usage: " . &basename ($0) . "\n" 
-      . " Options:\n" . join ('', map { "   --$_\n" } @opts_f, @opts_s);
-}
-
 sub getView
 {
+  # Return view : local => path-to-local pack, inter.1 => path-to-inter1 pack, etc...
+  
   my %args = @_;
 
   $args{local} = 1 unless (exists $args{local});
@@ -240,6 +235,17 @@ sub getView
     }
 
   return @pack;
+}
+
+my %opts = (qw (verbose 0 message Commit), pack0 => &cwd ());
+
+my @opts_f = qw (push up verbose help debug);
+my @opts_s = qw (message pack0 pack1);
+
+sub help
+{
+  print "Usage: " . &basename ($0) . "\n" 
+      . " Options:\n" . join ('', map { "   --$_\n" } @opts_f, @opts_s);
 }
 
 if (-f '.synpack.conf')
@@ -271,7 +277,11 @@ if ($opts{'up'})
 
 my $pack1 = 'File::Spec'->rel2abs ($opts{pack1});
 
+# Detect the case of merging into parent pack
+
 $opts{'up'} = scalar (@view) > 0 && ($view[1] eq $pack1) ? $view[0] : undef;
+
+# Change pack0 & pack1 are packs
 
 for my $opt (qw (pack0 pack1))
   {
@@ -279,18 +289,25 @@ for my $opt (qw (pack0 pack1))
     die unless (-f "$opts{$opt}/.genesis");
   }
 
+my $branch0 = &getBranch (pack => $pack0);
+my $branch1 = &getBranch (pack => $pack1);
 
 sub PP
 {
-
-  print "\n" x 4;
-  print "@_\n" x 4;
-  print "\n" x 4;
-
+  if ($opts{debug})
+    {
+      print "\n" x 4;
+      print "@_\n" x 4;
+      print "\n" x 4;
+    }
 }
 
-
 &PP ("REBUILD $pack0");
+
+
+#================================== PACK0 =====================================
+
+# Build, commit & push pack0
 
 &rebuildIfNeeded (%opts, pack => $pack0);
 
@@ -300,7 +317,11 @@ if (&getStatus (%opts, pack => $pack0))
     &runGitPackCommand (%opts, pack => $pack0, command => [qw (gitpack commit -a), -m => $opts{message}]);
   }
 
-my $branch0 = &getBranch (pack => $pack0);
+if ($opts{push})
+  {
+    &runGitPackCommand 
+      (%opts, pack => $pack0, command => [qw (gitpack push origin), $branch0]);
+  }
 
 my $BASHRC = << 'EOF';
 
@@ -318,7 +339,11 @@ pwd
 
 EOF
 
+#================================== PACK1 =====================================
+
 &PP ("MERGE IN $pack1");
+
+#                               *** MERGE ***
 
 &runGitPackCommand 
   (%opts, pack => $pack1, command => [qw (gitpack pull), "$pack0/.gitpack/git", $branch0], errorHandler => sub
@@ -335,16 +360,26 @@ export PS1="$MERGE-$ENV{PS1}"
 
 gitpack status
 
+echo "PLEASE MERGE MANUALLY; DO NOT FORGET TO COMMIT YOUR CHANGES"
+
 EOF
 
   chmod (0755, 'cmd.sh');
-  system (qw (bash --init-file ./.synpack.sh -i));
+
+  while (&getStatus (%opts, pack => $pack1))
+    {
+      if (system (qw (bash --init-file ./.synpack.sh -i)))
+        {
+          die;
+        }
+    }
 
   return 0;
 });
 
-
 &PP ("REBUILD $pack1");
+
+#                               *** BUILD ***
 
 &rebuildIfNeeded (%opts, pack => $pack1, errorHandler => sub
 {
@@ -358,31 +393,63 @@ $BASHRC
 
 export PS1="$BUILD-$ENV{PS1}"
 
+echo "PLEASE COMPILE MANUALLY; DO NOT FORGET TO COMMIT YOUR CHANGES"
+
 EOF
 
   chmod (0755, 'cmd.sh');
-  system (qw (bash --init-file ./.synpack.sh -i));
 
+  while ((! -f "$pack1/bin/MASTERODB") or &getStatus (%opts, pack => $pack1))
+    {
+      if (system (qw (bash --init-file ./.synpack.sh -i)))
+        {
+          die;
+        }
+    }
+  
+  
   return 0;
 });
 
+#                               *** PUSH ***
+
+if ($opts{push})
+  {
+    &runGitPackCommand 
+      (%opts, pack => $pack1, command => [qw (gitpack push origin), $branch1]);
+  }
 
 &PP ("UP");
 
 
+#================================== PACK0 =====================================
+
 if (my $view1 = $opts{up})
   {
-    &runCommand (command => ['cleanpack', '-f'], chdir => $pack0);
-    &runCommand (command => ['resetpack', '-f'], chdir => $pack0);
-    &runCommand (command => ['./ics_masterodb'], chdir => $pack0);
+    # pack1 is the parent of pack0
+
+    # Update dependency database
 
     my $text = &slurp ("$pack1/src/.gmak/local.sds");
     $text =~ s/'local'/'$view1'/gms;
     'FileHandle'->new (">$pack0/src/.gmak/$view1.sds")->print ($text);
 
+    # The following command will remove files from pack0 which are identical in pack1
+
     &runGitPackCommand (%opts, pack => $pack0, command => [qw (gitpack checkout -f -q), $branch0]);
+
+    # Rebuild pack0
+
+    &runCommand (command => ['cleanpack', '-f'], chdir => $pack0);
+    &runCommand (command => ['resetpack', '-f'], chdir => $pack0);
+    &runCommand (command => ['./ics_masterodb'], chdir => $pack0);
+
+    # Rebuild vimpack index
 
     &rmtree ("$pack0/.vimpack");
     &runCommand (command => ['vimpack', '-i'], chdir => $pack0);
 
   }
+
+
+
