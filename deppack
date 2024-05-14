@@ -1,0 +1,110 @@
+#!/usr/bin/perl -w
+
+use strict;
+use FileHandle;
+use File::stat;
+use File::Copy;
+use File::Path;
+use File::Basename;
+use Getopt::Long;
+use Data::Dumper;
+use Digest::MD5 qw (md5_hex);
+use DB_File;
+use Fcntl qw (:flock O_RDWR O_CREAT);
+
+sub slurp
+{
+  my $f = shift;
+  my $data = do { local $/ = undef; my $fh = 'FileHandle'->new ("<$f"); <$fh> };
+  return $data;
+}
+
+sub db
+{
+  my ($pack, $mode) = @_;
+  
+  my $fh = 'FileHandle'->new (">>$pack/.deppack.lock");
+  flock ($fh, $mode);
+
+  my $db = tie (my %h, 'DB_File', "$pack/.deppack.db", O_RDWR | O_CREAT, 0644, $DB_HASH);
+  
+  return {db => $db, fh => $fh};
+}
+
+sub archive
+{
+  my %args = @_;
+
+  my ($pack, $file, $hash) = @args{qw (pack file hash)};
+
+  if (-f $file)
+    {
+      my $X = &db ($pack, LOCK_EX);
+      $X->{db}->put ($hash, &slurp ($file));
+    }
+}
+
+sub restore
+{
+  my %args = @_;
+
+  my ($pack, $file, $hash) = @args{qw (pack file hash)};
+
+  my $X = &db ($pack, LOCK_SH);
+
+  if ($X->{db}->get ($hash, my $data) == 0)
+    {
+      'FileHandle'->new (">$file")->print ($data);
+      return 1;
+    }
+}
+
+my %opts = qw ();
+my @opts_s = qw ();
+my @opts_f = qw ();
+
+&GetOptions 
+(
+  (map { ("$_=s" => \$opts{$_}) } @opts_s),
+  (map { ($_ => \$opts{$_}) } @opts_f),
+);
+
+my @cmd = @ARGV;
+
+my ($pack, $file) = @ENV{qw (TARGET_PACK GMK_CURRENT_FILE)};
+
+my $hash = $file . '-' . &md5_hex (&slurp (&basename ($file)));
+
+my $content = &basename ($file) . '-content';
+
+if (&restore (pack => $pack, file => $content, hash => "$file-$hash-content"))
+  {
+    my @list = @{ do ($content) };
+    for my $f (@list)
+      {
+        &restore (pack => $pack, file => $f, hash => "$file-$hash-$f");
+      }
+  }
+else
+  {
+    my %seen = map { ($_, 1) } <*>;
+
+    system (@cmd) && die;
+
+    my @list = grep { ! $seen{$_} } <*>;
+
+    local $Data::Dumper::Terse = 1;
+    'FileHandle'->new (">$content")->print (&Dumper (\@list));
+
+    &archive (pack => $pack, file => $content, hash => "$file-$hash-content");
+
+    for my $f (@list)
+      {
+        &archive (pack => $pack, file => $f, hash => "$file-$hash-$f");
+      }
+  }
+
+unlink ($content);
+
+
+
