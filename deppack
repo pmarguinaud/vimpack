@@ -31,7 +31,7 @@ sub db
   return {db => $db, fh => $fh};
 }
 
-sub archive
+sub archiveDB
 {
   my %args = @_;
 
@@ -44,7 +44,7 @@ sub archive
     }
 }
 
-sub restore
+sub restoreDB
 {
   my %args = @_;
 
@@ -56,6 +56,34 @@ sub restore
     {
       'FileHandle'->new (">$file")->print ($data);
       return 1;
+    }
+}
+
+sub archive
+{
+  my %args = @_;
+
+  my ($pack, $file, $hash) = @args{qw (pack file hash)};
+
+  if (-f $file)
+    {
+      my $dst = "$pack/.deppack/$hash";
+      &mkpath (&dirname ($dst));
+      &copy ($file, $dst);
+    }
+}
+
+sub restore
+{
+  my %args = @_;
+
+  my ($pack, $file, $hash) = @args{qw (pack file hash)};
+
+  my $dst = "$pack/.deppack/$hash";
+
+  if (-f $dst)
+    {
+      &copy ($dst, $file);
     }
 }
 
