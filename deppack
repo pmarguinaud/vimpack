@@ -87,9 +87,9 @@ sub restore
     }
 }
 
-my %opts = qw ();
+my %opts = (off => $ENV{DEPPPACKOFF});
 my @opts_s = qw ();
-my @opts_f = qw ();
+my @opts_f = qw (off);
 
 &GetOptions 
 (
@@ -98,6 +98,8 @@ my @opts_f = qw ();
 );
 
 my @cmd = @ARGV;
+
+$opts{off} && exec (@cmd);
 
 my ($pack, $file) = @ENV{qw (TARGET_PACK GMK_CURRENT_FILE)};
 
