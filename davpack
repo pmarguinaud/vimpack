@@ -673,6 +673,11 @@ sub help
       . " Options:\n" . join ('', map { "   --$_\n" } @opts_f, @opts_s);
 }
 
+if (-f '.davpack.conf')
+  {
+    unshift (@ARGV, @{ do './.davpack.conf' });
+  }
+
 &GetOptions
 (
   (map { ($_, \$opts{$_}) } @opts_f),
