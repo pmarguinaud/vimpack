@@ -472,16 +472,19 @@ sub colorStatus
 
   my %color = 
   (
-    KO                => 'red',
+    KO                => 'black on_red',
     OK                => 'green',
     '(C...)'          => 'yellow',
     '(I...)'          => 'yellow',
     'X:R?'            => 'yellow',
+    'X'               => 'black on_red',
+    'E'               => 'green',
+    '!'               => 'black on_red',
   );
 
   if ((-t STDOUT) && (my $color = $color{$status}))
     {
-      return &colored ([$color], $text);
+      return &colored (["$color"], $text);
     }
   else
     {
@@ -750,7 +753,7 @@ else
         {
           opts =>  
             {   
-              'prefix-mpirun' => ['=', [$dumper, '--path', $dvpath]],
+              'prefix-mpirun' => ['=', [$dumper, '--path', $dvpath, '--']],
             },  
         };
 
