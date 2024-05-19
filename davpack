@@ -474,9 +474,9 @@ sub colorStatus
   (
     KO                => 'black on_red',
     OK                => 'green',
-    '(C...)'          => 'yellow',
+    '(C...)'          => 'black on_yellow',
     '(I...)'          => 'yellow',
-    'X:R?'            => 'yellow',
+    'X:R?'            => 'black on_red',
     'X'               => 'black on_red',
     'E'               => 'green',
     '!'               => 'black on_red',
@@ -589,6 +589,14 @@ sub runTestCases
     }
   else
     {
+      my $conf = &getConf (nrv => $nrv);
+      
+      my $dir = &getMtoolRoot (conf => $conf);
+
+      my $summaries_stack = "$dir/summaries_stack";
+
+      unlink ($_) for (<$summaries_stack/*>);
+
       &davaiRunCommand (command => ['davai-run_tests'], %args);
     }
 }

@@ -535,14 +535,14 @@ sub colorStatus
 
   my %color = 
   (
-    FAILED            => 'red',
-    ABOR1             => 'red',
+    FAILED            => 'black on_red',
+    ABOR1             => 'black on_red',
     COMPLETED         => 'green',
-    'forrtl: severe'  => 'red',
-    SIGSEGV           => 'red',
+    'forrtl: severe'  => 'black on_red',
+    SIGSEGV           => 'black on_red',
     UNKNOWN           => 'yellow',
-    CANCELLED         => 'red',
-    'BAD TERMINATION' => 'red',
+    CANCELLED         => 'black on_red',
+    'BAD TERMINATION' => 'black on_red',
   );
 
   if ((-t STDOUT) && (my $color = $color{$status}))
@@ -649,12 +649,17 @@ sub showStatus
   printf (" | %20s | %s", &center ('REF', 20), '') if ($mitraillette1);
   print "\n";
 
-  for my $o (sort <*.o*>)
+  my @o = sort <*.o*>;
+
+  for my $i (0 .. $#o)
     {
+      my $o = $o[$i];
+
       my $edit = 0;
 
       my $info = &jobInfo ($o);
-      printf ("| %-${len}s | %20s", $info->{CNMEXPL}, &colorStatus (&center ($info->{status}, 20)));
+
+      my $line = sprintf ("| %-${len}s | %20s", $info->{CNMEXPL}, &colorStatus (&center ($info->{status}, 20)));
 
       my $o1;
 
@@ -671,7 +676,7 @@ sub showStatus
 
               my $diff = &node::diff ($o, $o1, $fhlog);
 
-              printf (" | %20s | %s", &colorStatus (&center ($info1->{status}, 20)), (! &statusEquiv ($info->{status}, $info1->{status})) || $diff ? 'DIFF' : '');
+              $line .= sprintf (" | %20s | %s", &colorStatus (&center ($info1->{status}, 20)), (! &statusEquiv ($info->{status}, $info1->{status})) || $diff ? 'DIFF' : '');
 
               $edit = $diff || ($info->{status} ne $info1->{status});
 
@@ -679,7 +684,14 @@ sub showStatus
             }
         }
 
-      printf ("\n");
+      $line .= "\n";
+
+      if ($i % 5 == 0)
+        {
+          $line =~ s/ /./go;
+        }
+
+      print $line;
 
       if ($args{'status-edit-diff'} && $o1 && $edit)
         {
