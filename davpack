@@ -480,6 +480,7 @@ sub colorStatus
     'X'               => 'black on_red',
     'E'               => 'green',
     '!'               => 'black on_red',
+    '?'               => 'black on_red',
   );
 
   if ((-t STDOUT) && (my $color = $color{$status}))
