@@ -108,7 +108,7 @@ sub runCommand
   $c and die ("Command `@cmd' failed\n");
 }
 
-sub runGitPackCommand
+sub gitpack
 {
   my %args = @_; 
 
@@ -116,7 +116,7 @@ sub runGitPackCommand
 
   $pack && chdir ($pack);
 
-  my @cmd = @{ ${args}{command} };
+  my @cmd = ('gitpack', @{ ${args}{command} });
 
   print "cwd=" . &cwd () . "\n@cmd\n" if ($args{verbose});
 
@@ -181,19 +181,19 @@ sub filesEqual
 
 sub getBranch
 {
-  chomp (my $branch = &runGitPackCommand (@_, command => [qw (gitpack rev-parse --abbrev-ref HEAD)]));
+  chomp (my $branch = &gitpack (@_, command => [qw (rev-parse --abbrev-ref HEAD)]));
   return $branch;
 }
 
 sub getStatus
 {
-  my $status = &runGitPackCommand (@_, command => [qw (gitpack status --porcelain)]);
+  my $status = &gitpack (@_, command => [qw (status --porcelain)]);
   return $status;
 }
 
 sub getCommit
 {
-  chomp (my $commit = &runGitPackCommand (@_, command => [qw (gitpack rev-parse HEAD)]));
+  chomp (my $commit = &gitpack (@_, command => [qw (rev-parse HEAD)]));
   return $commit;
 }
 
@@ -237,10 +237,10 @@ sub getView
   return @pack;
 }
 
-my %opts = (qw (verbose 0 message Commit), pack0 => &cwd ());
+my %opts = (qw (verbose 0 message Commit method merge), pack0 => &cwd ());
 
 my @opts_f = qw (push up verbose help debug);
-my @opts_s = qw (message pack0 pack1);
+my @opts_s = qw (message pack0 pack1 method);
 
 sub help
 {
@@ -258,6 +258,11 @@ if (-f '.synpack.conf')
   (map { ($_, \$opts{$_}) } @opts_f),
   (map { ("$_=s", \$opts{$_}) } @opts_s),
 );
+
+if ($opts{method} !~ m/^(?:merge|cherry-pick)$/o)
+  {
+    die (&basename ($0) . " --method merge | cherry-pick");
+  }
 
 if ($opts{help})
   {
@@ -314,13 +319,13 @@ sub PP
 if (&getStatus (%opts, pack => $pack0))
   {
     &PP ("COMMIT IN $pack0");
-    &runGitPackCommand (%opts, pack => $pack0, command => [qw (gitpack commit -a), -m => $opts{message}]);
+    &gitpack (%opts, pack => $pack0, command => [qw (commit -a), -m => $opts{message}]);
   }
 
 if ($opts{push})
   {
-    &runGitPackCommand 
-      (%opts, pack => $pack0, command => [qw (gitpack push origin), $branch0]);
+    &gitpack 
+      (%opts, pack => $pack0, command => [qw (push origin), $branch0]);
   }
 
 my $BASHRC = << 'EOF';
@@ -345,8 +350,15 @@ EOF
 
 #                               *** MERGE ***
 
-&runGitPackCommand 
-  (%opts, pack => $pack1, command => [qw (gitpack pull), "$pack0/.gitpack/git", $branch0], errorHandler => sub
+my ($remote) = &gitpack (%opts, pack => $pack1, command => ['remote']);
+my @remote = split (m/\n/o, $remote);
+
+&gitpack (%opts, pack => $pack1, command => [qw (remote remove pack0)]) if (grep { $_ eq 'pack0' } @remote);
+&gitpack (%opts, pack => $pack1, command => [qw (remote add pack0), "$pack0/.gitpack/git"]);
+&gitpack (%opts, pack => $pack1, command => [qw (fetch -a pack0)]);
+
+&gitpack 
+  (%opts, pack => $pack1, command => [$opts{method}, "pack0/$branch0"], errorHandler => sub
 {
   my @cmd = @_;
 
@@ -376,6 +388,8 @@ EOF
 
   return 0;
 });
+
+&gitpack (%opts, pack => $pack1, command => [qw (remote remove pack0)]);
 
 &PP ("REBUILD $pack1");
 
@@ -415,8 +429,8 @@ EOF
 
 if ($opts{push})
   {
-    &runGitPackCommand 
-      (%opts, pack => $pack1, command => [qw (gitpack push origin), $branch1]);
+    &gitpack 
+      (%opts, pack => $pack1, command => [qw (push origin), $branch1]);
   }
 
 &PP ("UP");
@@ -436,7 +450,7 @@ if (my $view1 = $opts{up})
 
     # The following command will remove files from pack0 which are identical in pack1
 
-    &runGitPackCommand (%opts, pack => $pack0, command => [qw (gitpack checkout -f -q), $branch0]);
+    &gitpack (%opts, pack => $pack0, command => [qw (checkout -f -q), $branch0]);
 
     # Rebuild pack0
 
