@@ -663,7 +663,7 @@ sub showStatus
 
       if ($i % 4 == 0)
         {
-          $line =~ s/ /./go;
+          $line =~ s/ /_/go;
         }
 
       print $line;
