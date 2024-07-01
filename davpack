@@ -181,7 +181,7 @@ sub davaiNewXp
   my $branch = &getBranch (%args);
   my $commit = &getCommit (%args);
 
-  my $out = &davaiRunCommand (command => ['davai-new_xp', -v => $args{version},  
+  my $out = &davaiRunCommand (command => ['davai-new_xp', -v => $args{version}, ($args{origin} ? ('--origin' => $args{origin}) : ()),
                                           -c => "$branch:$commit", $branch], 
                               %args);
   my ($nrv) = ($out =~ m/=> (\S+)/goms);
@@ -677,7 +677,7 @@ sub showStatus
 
 my %opts = (version => &getVersion (), filter => '');
 my @opts_f = qw (verbose dryrun help reuse status cancel dumper versions list);
-my @opts_s = qw (version filter);
+my @opts_s = qw (version filter origin);
 
 sub help
 {
