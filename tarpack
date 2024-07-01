@@ -111,7 +111,7 @@ for my $pack (@pack)
                                 unless ($done{$d}++);
 
                               ($ddev ? &copy ($p, $q) : link ($p, $q))
-                                or die ("Cannot copy $p to $q\n");
+                                or warn ("Cannot copy $p to $q\n");
 
                               printf ("src/$pack/$p\n");
                             },
