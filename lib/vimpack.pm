@@ -80,8 +80,13 @@ sub getsindex
       my %sindex;
 
       my $follow = 0;
-      &File::Find::find ({wanted => sub { &wanted_windex_ (sindex => \%s, fhlog => $self->{fhlog}) }, 
-                          no_chdir => 1, follow => $follow}, "src/$local/");
+
+      for my $dir ("jet/$local/", "src/$local/")
+        {
+          next  unless (-d $dir);
+          &File::Find::find ({wanted => sub { &wanted_windex_ (sindex => \%s, fhlog => $self->{fhlog}) }, 
+                              no_chdir => 1, follow => $follow}, $dir);
+        }
 
       &cidx (\%s, \%sindex);
 
@@ -121,9 +126,13 @@ sub getwindex
   {
     my %b;
     my $follow = 0;
-    &File::Find::find ({wanted => sub { &wanted_windex_ (windex => \%b, findex => \%findex, 
-                                                         fhlog => $self->{fhlog}) }, 
-                       no_chdir => 1, follow => $follow}, "src/$local/");
+
+    for my $dir ("jet/$local/", "src/$local/")
+      {
+        &File::Find::find ({wanted => sub { &wanted_windex_ (windex => \%b, findex => \%findex, 
+                                                             fhlog => $self->{fhlog}) }, 
+                           no_chdir => 1, follow => $follow}, $dir);
+      }
     
     &cidx (\%b, \%windex);
   }
@@ -231,7 +240,7 @@ sub edit
   
       my ($P) = (($sindex->{$F} ? ($sindex->{$F}) : ()), split (m/\s+/o, $SINDEX->{$F}));
 
-      my ($view, $G) = ($P =~ m,^src/([^/]+)/(.*)$,go);
+      my ($dir, $G) = ($P =~ m,^((?:jet|src)/[^/]+)/(.*)$,go);
       
       unless ($G)
         {
@@ -244,14 +253,19 @@ sub edit
           next;
         }
       
-      my ($H1, $H2, $H3) = map { 'File::Spec'->canonpath ($_) } ("src/local/$G", "src/$view/$G", "$self->{TOP}/src=/$G");
+      my ($H1a, $H1b, $H2, $H3) = map { 'File::Spec'->canonpath ($_) } ("jet/local/$G", "src/local/$G", "$dir/$G", "$self->{TOP}/src=/$G");
 
       &mkpath (&dirname ($H3));
       
-      if (-f $H1)
+      if (-f $H1a)
         {
 # already in local set
-          push @HlF, [ $H1, $line, $column, $F ];
+          push @HlF, [ $H1a, $line, $column, $F ];
+        }
+      elsif (-f $H1b)
+        {
+# already in local set
+          push @HlF, [ $H1b, $line, $column, $F ];
         }
       else
         {

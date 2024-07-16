@@ -285,9 +285,9 @@ sub pretty_grep
     {
 
       my $fhF;
-      for my $view (@gmkview)
+      for my $dir (map { ("jet/$_", "src/$_") } @gmkview)
         {
-          last if ($fhF = 'FileHandle'->new ("<src/$view/$f"));
+          last if ($fhF = 'FileHandle'->new ("<$dir/$f"));
         }
       my @text = <$fhF>;
       $fhF->close ();

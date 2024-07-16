@@ -79,7 +79,7 @@ sub wanted_windex_
 
   $callback && $callback->($f);
 
-  $f =~ s,^(src/[^/]+)/,,goms;  
+  $f =~ s,^((?:src|jet)/[^/]+)/,,goms;  
   my $src = $1;
 
 # skip if already seen
@@ -122,13 +122,15 @@ sub idx
 
       mkdir ($self->{TOP});
 
-      for my $view (@gmkview)
+      my $follow = 0;
+
+      for my $dir (map { ("jet/$_/", "src/$_/") } @gmkview)
         {
-          my $follow = 0;
+          next unless (-d $dir);
           &File::Find::find ({wanted => sub { &wanted_windex_ (windex => \%windex, findex => \%findex, 
                                                                sindex => \%sindex, fhlog  => $fhlog, 
                                                                callback => $callback) }, 
-                             no_chdir => 1, follow => $follow}, "src/$view/");
+                             no_chdir => 1, follow => $follow}, $dir);
         }
   
       tie (my %WINDEX,  'DB_File', "$self->{TOP}/windex.db",  O_RDWR | O_CREAT, 0666, $DB_HASH);

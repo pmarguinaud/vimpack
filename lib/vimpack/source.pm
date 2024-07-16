@@ -90,7 +90,7 @@ sub islocal
       $file = $self->{file};
     }
 
-  return $file =~ m,^src/local/,o;
+  return $file =~ m,^(?:jet|src)/local/,o;
 }
 
 sub ispack
@@ -105,7 +105,7 @@ sub ispack
       $file = $self->{file};
     }
 
-  return $file =~ m,^src/[^/]+/,o;
+  return $file =~ m,^(?:jet|src)/[^/]+/,o;
 }
 
 sub istmp
@@ -135,7 +135,7 @@ sub path
   for ($file)
     {
       s,^.*src=/,,o;
-      s,^src/[^/]+/,,o;
+      s,^(?:jet|src)/[^/]+/,,o;
     }
 
   return $file;
@@ -183,7 +183,7 @@ sub backup_copy
 
   my $edtr = $args{editor};
 
-  (my $file = $self->{file}) =~ s,^src/([^/]+)/,,o;
+  (my $file = $self->{file}) =~ s,^(?:jet|src)/([^/]+)/,,o;
 
 # save to history
   my $f_his = "$edtr->{TOP}/hst=/$file";
@@ -217,9 +217,9 @@ sub do_commit
     }
   elsif ((! $self->islocal ()) && $self->ispack ())
     {
-      ($file = $self->{file}) =~ s,^src/([^/]+)/,,o;
-      my $view = $1;
-      ($f_old, $f_new) = ("src/$view/$file", "src/local/$file");
+      ($file = $self->{file}) =~ s,^(jet|src)/([^/]+)/,,o;
+      my $dir = $1;
+      ($f_old, $f_new) = ("$dir/$file", "src/local/$file");
     }
   else
     {
@@ -297,9 +297,9 @@ sub do_diff
       return;
     }
 
-  my ($view, $G) = ($P1 =~ m,^src/([^/]+)/(.*)$,go);
+  my ($dir, $G) = ($P1 =~ m,^((?:jet|src)/[^/]+)/(.*)$,go);
 
-  unless ($view eq 'local')
+  unless ($dir =~ m,^(?:jet|src)/local$,o)
     {
       my $P3 = "$edtr->{TOP}/src=/$G";
       &vimpack::tools::copy (fi => $P1, fo => $P3, fhlog => $edtr->{fhlog});
