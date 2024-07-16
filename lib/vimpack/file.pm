@@ -38,7 +38,7 @@ sub issrc
       $file = $self->{file};
     }
   
-  return $file =~ m/(?:^jet|src=)/o;
+  return $file =~ m,(?:^jet|^src|src=|jet=)/,o;
 # return (ref ($self) ? $self->{file} : $file) !~ m/search=/o;
 }
 
@@ -56,6 +56,13 @@ sub issearch
 
   return $file =~ m/search=/o;
 # return (ref ($self) ? $self->{file} : $file) =~ m/search=/o;
+}
+
+sub isjet
+{
+  my $self = shift;
+  my $file = $self->{file};
+  return $file =~ m,^jet/,o;
 }
 
 sub do_edit

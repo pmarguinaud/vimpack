@@ -240,7 +240,7 @@ sub edit
   
       my ($P) = (($sindex->{$F} ? ($sindex->{$F}) : ()), split (m/\s+/o, $SINDEX->{$F}));
 
-      my ($dir, $G) = ($P =~ m,^((?:jet|src)/[^/]+)/(.*)$,go);
+      my ($qual, $dir, $G) = ($P =~ m,^(jet|src)/([^/]+)/(.*)$,go);
       
       unless ($G)
         {
@@ -253,19 +253,14 @@ sub edit
           next;
         }
       
-      my ($H1a, $H1b, $H2, $H3) = map { 'File::Spec'->canonpath ($_) } ("jet/local/$G", "src/local/$G", "$dir/$G", "$self->{TOP}/src=/$G");
+      my ($H1, $H2, $H3) = map { 'File::Spec'->canonpath ($_) } ("$qual/local/$G", "$qual/$dir/$G", "$self->{TOP}/$qual=/$G");
 
       &mkpath (&dirname ($H3));
       
-      if (-f $H1a)
+      if (-f $H1)
         {
 # already in local set
-          push @HlF, [ $H1a, $line, $column, $F ];
-        }
-      elsif (-f $H1b)
-        {
-# already in local set
-          push @HlF, [ $H1b, $line, $column, $F ];
+          push @HlF, [ $H1, $line, $column, $F ];
         }
       else
         {

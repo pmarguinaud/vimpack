@@ -134,7 +134,7 @@ sub path
 
   for ($file)
     {
-      s,^.*src=/,,o;
+      s,^.*(jet|src)=/,,o;
       s,^(?:jet|src)/[^/]+/,,o;
     }
 
@@ -210,7 +210,9 @@ sub do_commit
 
   if ($self->istmp ())
     {
-      ($file = $self->{file}) =~ s,^.*src=/,,;
+      $file = $self->{file};
+      return if ($file =~ m/jet=/o);
+      $file =~ s,^.*src=/,,;
       &VIM::DoCommand ('silent write')
         if ($args{write});
       ($f_old, $f_new) = ("$edtr->{TOP}/src=/$file", "src/local/$file");
@@ -297,11 +299,11 @@ sub do_diff
       return;
     }
 
-  my ($dir, $G) = ($P1 =~ m,^((?:jet|src)/[^/]+)/(.*)$,go);
+  my ($qual, $dir, $G) = ($P1 =~ m,^(jet|src)/([^/]+)/(.*)$,go);
 
-  unless ($dir =~ m,^(?:jet|src)/local$,o)
+  unless ($dir eq 'local')
     {
-      my $P3 = "$edtr->{TOP}/src=/$G";
+      my $P3 = "$edtr->{TOP}/$qual=/$G";
       &vimpack::tools::copy (fi => $P1, fo => $P3, fhlog => $edtr->{fhlog});
       $P1 = $P3;
     }
