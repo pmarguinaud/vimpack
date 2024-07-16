@@ -21,7 +21,7 @@ sub new
                  @_ 
                }, $class;
 
-  $self->{log} = 'log'->new (">>/home/gmap/mrpm/marguina/tmp/vimpack.log");
+# $self->{log} = 'log'->new (">>/home/gmap/mrpm/marguina/tmp/vimpack.log");
 
   return $self;
 }
