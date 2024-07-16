@@ -38,7 +38,7 @@ sub issrc
       $file = $self->{file};
     }
   
-  return $file =~ m/(?:^src|src=)/o;
+  return $file =~ m/(?:^jet|src=)/o;
 # return (ref ($self) ? $self->{file} : $file) !~ m/search=/o;
 }
 

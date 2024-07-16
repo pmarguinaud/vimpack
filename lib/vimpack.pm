@@ -186,7 +186,7 @@ sub diff
 
   return unless ($P);
 
-  my $file = 'vimpack::file'->new (file => $P);
+  my $file = 'vimpack::file'->new (file => $P, log => $self->{log});
 
   $file->do_diff (editor => $self);
 

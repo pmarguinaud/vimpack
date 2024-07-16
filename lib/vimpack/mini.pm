@@ -8,6 +8,7 @@ use File::Find qw ();
 use File::Basename;
 
 use vimpack::history;
+use log;
 
 sub new
 {
@@ -19,6 +20,8 @@ sub new
                  maxfind => 200,
                  @_ 
                }, $class;
+
+# $self->{log} = 'log'->new (">>/home/gmap/mrpm/marguina/tmp/vimpack.log");
 
   return $self;
 }
