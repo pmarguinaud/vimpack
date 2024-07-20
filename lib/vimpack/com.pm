@@ -82,14 +82,14 @@ sub insert
         {
           my ($File, $Line, $Column, $Level, $Message) = ($3, $4, 1, $1, $2);
           $Column ||= 1; $Column--; $Line--;
-          $Message{$File}[$Line][$Column]{$Level}{$Message} = 1;
+          $Message{&basename ($File)}[$Line][$Column]{$Level}{$Message} = 1;
         }
 # Intel Fortran compiler .lst
       elsif (($lst =~ m/\.lst$/o) && ($line =~ m/^(\S+)\((\d+)\): (warning|remark|error) #\d+: (.*)$/o))
         {
           my ($File, $Line, $Column, $Level, $Message) = ($1, $2, 1, $3, $4);
           $Column ||= 1; $Column--; $Line--;
-          $Message{$File}[$Line][$Column]{$Level}{$Message} = 1;
+          $Message{&basename ($File)}[$Line][$Column]{$Level}{$Message} = 1;
         }
 # Intel Fortran compiler .optrpt
       elsif (($lst =~ m/\.optrpt$/o) && ($line =~ m/^LOOP BEGIN at \S+\(\d+,\d+\)$/o))
@@ -125,7 +125,7 @@ sub insert
           $Message{$File}[$Line][$Column]{$Level}{$Message} = 1;
         }
     }
-  
+
   my @text = map { $buf->Get ($_) . "\n" } (1 .. $buf->Count ());
   my $imess = 0;
   my $iloca = 0;
