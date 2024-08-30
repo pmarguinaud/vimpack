@@ -155,7 +155,7 @@ sub needReBuild
   &find ({wanted => sub 
   {  
     my $f = $File::Find::name;
-    return unless ((-f $f) && ($f =~ m/\.F90$/o));
+    return unless ((-f $f) && ($f =~ m/\.(?:F|F90|fypp|hypp|c|h|cpp|cc)$/io));
     my $st = stat ($f);
     $rebuild ||= $st->mtime () > $t0;
   }, no_chdir => 1}, "$pack/src/local/");
