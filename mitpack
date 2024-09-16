@@ -511,9 +511,10 @@ sub jobInfo
   my $o = shift;
 
   my $text = &slurp ($o);
-  my ($status) = ($text =~ m/(ABOR1|FAILED|SIGSEGV|CANCELLED|forrtl: severe|BAD TERMINATION)/goms);
+  my ($status) = ($text =~ m/(ABOR1|FAILED|SIGSEGV|CANCELLED|forrtl: severe|BAD TERMINATION|SPECTRAL NORMS[^\n]*NaN)/goms);
 
   $status =~ s/^forrtl:.*SIGSEGV/SIGSEGV/o if ($status);
+  $status = 'NaN' if ($status && ($status =~ m/NaN/o));
 
   my ($CNMEXPL) = ($text =~ m/CNMEXPL=(\w+)/goms);
   $CNMEXPL or die ($o);
@@ -543,6 +544,7 @@ sub colorStatus
     UNKNOWN           => 'yellow',
     CANCELLED         => 'black on_red',
     'BAD TERMINATION' => 'black on_red',
+    NaN               => 'black on_red',
   );
 
   if ((-t STDOUT) && (my $color = $color{$status}))
