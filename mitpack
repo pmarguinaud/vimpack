@@ -511,10 +511,26 @@ sub jobInfo
   my $o = shift;
 
   my $text = &slurp ($o);
-  my ($status) = ($text =~ m/(ABOR1|FAILED|SIGSEGV|CANCELLED|forrtl: severe|BAD TERMINATION|SPECTRAL NORMS[^\n]*NaN)/goms);
+
+  my $ABORTED = << 'EOF';
+
+#########################################
+#        BULL - METEO-FRANCE            #
+#        Job Accounting                 #
+#########################################
+EOF
+
+  if (substr ($text, 0, length ($ABORTED)) eq $ABORTED)
+    {
+      unlink ($o);
+      return;
+    }
+
+  my ($status) = ($text =~ m/(ABOR1|FAILED|SIGSEGV|CANCELLED|forrtl: severe|BAD TERMINATION|SPECTRAL NORMS[^\n]*NaN|Cannot access ..\/ARPEXE.)/goms);
 
   $status =~ s/^forrtl:.*SIGSEGV/SIGSEGV/o if ($status);
   $status = 'NaN' if ($status && ($status =~ m/NaN/o));
+  $status = 'Missing' if ($status && ($status =~ m/Cannot access/o));
 
   my ($CNMEXPL) = ($text =~ m/CNMEXPL=(\w+)/goms);
   $CNMEXPL or die ($o);
@@ -545,6 +561,7 @@ sub colorStatus
     CANCELLED         => 'black on_red',
     'BAD TERMINATION' => 'black on_red',
     NaN               => 'black on_red',
+    Missing           => 'black on_red',
   );
 
   if ((-t STDOUT) && (my $color = $color{$status}))
@@ -653,13 +670,13 @@ sub showStatus
 
   my @o = sort <*.o*>;
 
-  for my $i (0 .. $#o)
+  MAIN : for my $i (0 .. $#o)
     {
       my $o = $o[$i];
 
       my $edit = 0;
 
-      my $info = &jobInfo ($o);
+      next unless (my $info = &jobInfo ($o));
 
       my $line = sprintf ("| %-${len}s | %20s", $info->{CNMEXPL}, &colorStatus (&center ($info->{status}, 20)));
 
@@ -673,6 +690,11 @@ sub showStatus
           if ($o1)
             {
               my $info1 = &jobInfo ($o1);
+
+              if ($args{'only-completed'})
+                {
+                  next unless ($info1->{status} eq 'COMPLETED');
+                }
              
               $fhlog->print ("$info->{CNMEXPL}\n\n");
 
@@ -723,7 +745,7 @@ sub getLastMitraillette
 }
 
 my %opts = (version => &getVersion (), filter => '');
-my @opts_f = qw (verbose help reuse dryrun status status-edit-diff cancel list);
+my @opts_f = qw (verbose help reuse dryrun status status-edit-diff cancel list only-completed);
 my @opts_s = qw (version reference filter);
 
 sub help
