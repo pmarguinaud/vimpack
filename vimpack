@@ -249,11 +249,17 @@ my ($fCOM, $fHLP) = ("$dTOP/start.vim", "$dHLP/vimpack.txt");
 
 my $hCOM = 'FileHandle'->new (">$fCOM");
 
+my $HOME = (getpwuid $>)[7];
+
 $hCOM->print (<< "EOF");
 
 
 set helpfile=$fHLP
 helptags $dHLP
+
+if filereadable ('$HOME/.vimpack.rc')
+  source $HOME/.vimpack.rc
+endif
 
 if has('perl')
 
