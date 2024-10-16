@@ -428,6 +428,26 @@ sub patchCJob
        {
          $_ = "\n";
        }
+     if (m/MPILAUNCH=/o)
+       {
+         s/--wrap/--wrap-stdeo --wrap/o;
+       }
+     if (m/^\$MPILAUNCH/o)
+       {
+         s/>lola.*//o;
+       }
+     if (m/KMP_AFFINITY=/o)
+       {
+         s/verbose,//o;
+       }
+     if (m/\\cat lola/o)
+       {
+         $_ = "\n";
+       }
+     if (m/\\rm (?:fort.4|\$file|\*|lola)/o)
+       {
+         $_ = "\n";
+       }
     }
 
   'FileHandle'->new (">$cjob")->print (join ('', @text));
