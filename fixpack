@@ -176,7 +176,7 @@ sub script
 }
 
 my %opts = qw (type xterm);
-my @opts_s = qw (type);
+my @opts_s = qw (type init);
 my @opts_f = qw (log warn);
 
 &GetOptions 
@@ -310,6 +310,16 @@ export PS1="$prog> "
 
 alias r='./.bin/run.sh'
 alias e="vi $temp"
+
+init=\"$opts{init}\"
+
+if [ "x\$init" != "x" ]
+then
+  if [ -f "\$init" ]
+  then
+  . \$init
+  fi
+fi
 
 EOF
 
