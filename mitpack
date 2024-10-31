@@ -442,11 +442,10 @@ sub patchCJob
        }
      if (m/\\cat lola/o)
        {
-         $_ = "\n";
+         $_ = ":\n";
        }
-     if (m/\\rm (?:fort.4|\$file|\*|lola)/o)
-       {
-         $_ = "\n";
+     if (m/\\rm (?:fort.4|\$file|\*|lola)/o) {
+         $_ = ":\n";
        }
     }
 
@@ -546,14 +545,14 @@ EOF
       return;
     }
 
+  my ($CNMEXPL) = ($text =~ m/CNMEXPL=(\w+)/goms);
+  $CNMEXPL or die ($o);
+
   my ($status) = ($text =~ m/(ABOR1|FAILED|SIGSEGV|CANCELLED|forrtl: severe|BAD TERMINATION|SPECTRAL NORMS[^\n]*NaN|Cannot access ..\/ARPEXE.)/goms);
 
   $status =~ s/^forrtl:.*SIGSEGV/SIGSEGV/o if ($status);
   $status = 'NaN' if ($status && ($status =~ m/NaN/o));
   $status = 'Missing' if ($status && ($status =~ m/Cannot access/o));
-
-  my ($CNMEXPL) = ($text =~ m/CNMEXPL=(\w+)/goms);
-  $CNMEXPL or die ($o);
 
   unless ($status)
     {

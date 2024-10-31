@@ -277,6 +277,10 @@ sub init
 
       my ($repo) = ($text =~ m/- IAL :\s*git\s*:\s*(\S+)/goms);
       my ($commit) = ($text =~ m/Commit:\s*(\S+)/goms);
+
+
+      die ("Cannot find repo & commit in $populated_from") unless ($repo && $commit);
+
       &init (%opts, repository => $repo, commit => $commit);
     }
   elsif ($pack1 && -f (my $bundle = "$pack1/bundle.yml"))
@@ -634,6 +638,7 @@ sub slurp
 {
   my $f = shift;
   my $fh = 'FileHandle'->new ("<$f");
+  $fh or die ("Cannot open $f");
   local $/ = undef;
   my $data = <$fh>;
   return $data;
