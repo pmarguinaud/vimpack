@@ -321,12 +321,13 @@ then
   fi
 fi
 
+./.bin/run.sh 
+
 EOF
 
 
 &script ('.bin/shell.sh', << 'EOF');
 #!/bin/bash
-./.bin/run.sh 
 exec bash --init-file ./.bin/bashrc -i
 EOF
 

@@ -431,6 +431,7 @@ sub getVersion
     '49t0' => 'DV49T0',
     '49t1' => 'DV49T1',
     '49t2' => 'DV49T2',
+    '50'   => 'DV50',
   );
 
   my $cycle = &getCycle ();
