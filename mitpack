@@ -716,7 +716,7 @@ sub showStatus
                   next unless ($info1->{status} eq 'COMPLETED');
                 }
              
-              $fhlog->print ("$info->{CNMEXPL}\n\n");
+              $fhlog && $fhlog->print ("$info->{CNMEXPL}\n\n");
 
               my $diff = &node::diff ($o, $o1, $fhlog);
 
@@ -724,7 +724,7 @@ sub showStatus
 
               $edit = $diff || ($info->{status} ne $info1->{status});
 
-              $fhlog->print ("\n\n");
+              $fhlog && $fhlog->print ("\n\n");
             }
         }
 

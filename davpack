@@ -185,6 +185,7 @@ sub davaiNewXp
                                           -c => "$branch:$commit", $branch], 
                               %args);
   my ($nrv) = ($out =~ m/=> (\S+)/goms);
+  
   return $nrv;
 }
 
@@ -678,7 +679,7 @@ sub showStatus
 
 my %opts = (version => &getVersion (), filter => '');
 my @opts_f = qw (verbose dryrun help reuse status cancel dumper versions list);
-my @opts_s = qw (version filter origin);
+my @opts_s = qw (version filter origin reference);
 
 sub help
 {
@@ -778,6 +779,19 @@ else
 
         'FileHandle'->new (">$confPath")->print ($text);
       }
+
+    if ($opts{reference})
+      {
+        my $conf = "$dv/davai/nrv/conf/davai_nrv.ini";
+        my $text = do { my $fh = 'FileHandle'->new ("<$conf"); local $/ = undef; <$fh> };
+        for ($text)
+          {
+            s/^(ref_xpid\s+=\s*)(\S+)$/$1$opts{reference}/gm;
+            s/^(ref_vconf\s+=\s*)(\S+)$/${1}nrv/gm;
+          }
+        'FileHandle'->new (">$conf")->print ($text);
+      }
+
   }
 
 die unless ($dv);
