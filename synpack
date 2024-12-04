@@ -144,11 +144,11 @@ sub needReBuild
 
   my $pack = $args{pack} || &cwd ();
 
-  my $MASTERODB = "$pack/bin/MASTERODB";
+  my $executable = "$pack/bin/" . uc ($args{executable});
 
-  return 1 unless (-f $MASTERODB);
+  return 1 unless (-f $executable);
 
-  my $t0 = stat ("$pack/bin/MASTERODB")->mtime ();
+  my $t0 = stat ("$pack/bin/" . uc ($args{executable}))->mtime ();
 
   my $rebuild = 0;
 
@@ -204,8 +204,8 @@ sub rebuildIfNeeded
   my %args = @_;
   my $pack = $args{pack} || &cwd ();
 
-  &runCommand (%args, command => ['./ics_masterodb'], chdir => $pack)
-    if (&needReBuild (pack => $pack));
+  &runCommand (%args, command => ["./ics_$args{executable}"], chdir => $pack)
+    if (&needReBuild (pack => $pack, executable => $args{executable}));
 }
 
 sub getView
@@ -237,10 +237,10 @@ sub getView
   return @pack;
 }
 
-my %opts = (qw (verbose 0 message Commit method merge), pack0 => &cwd ());
+my %opts = (qw (verbose 0 message Commit method merge), pack0 => &cwd (), executable => 'MASTERODB');
 
 my @opts_f = qw (push up verbose help debug);
-my @opts_s = qw (message pack0 pack1 method);
+my @opts_s = qw (message pack0 pack1 method executable);
 
 sub help
 {
@@ -258,6 +258,8 @@ if (-f '.synpack.conf')
   (map { ($_, \$opts{$_}) } @opts_f),
   (map { ("$_=s", \$opts{$_}) } @opts_s),
 );
+
+$opts{executable} = lc ($opts{executable});
 
 if ($opts{method} !~ m/^(?:merge|cherry-pick)$/o)
   {
@@ -348,6 +350,9 @@ EOF
 
 &PP ("MERGE IN $pack1");
 
+
+$ENV{PS1} ||= '$ ';
+
 #                               *** MERGE ***
 
 my ($remote) = &gitpack (%opts, pack => $pack1, command => ['remote']);
@@ -413,7 +418,7 @@ EOF
 
   chmod (0755, 'cmd.sh');
 
-  while ((! -f "$pack1/bin/MASTERODB") or &getStatus (%opts, pack => $pack1))
+  while ((! -f "$pack1/bin/$opts{executable}") or &getStatus (%opts, pack => $pack1))
     {
       if (system (qw (bash --init-file ./.synpack.sh -i)))
         {
@@ -456,7 +461,7 @@ if (my $view1 = $opts{up})
 
     &runCommand (command => ['cleanpack', '-f'], chdir => $pack0);
     &runCommand (command => ['resetpack', '-f'], chdir => $pack0);
-    &runCommand (command => ['./ics_masterodb'], chdir => $pack0);
+    &runCommand (command => ["./ics_$opts{executable}"], chdir => $pack0);
 
     # Rebuild vimpack index
 
