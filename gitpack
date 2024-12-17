@@ -178,7 +178,10 @@ sub genesis
 sub init
 {
   my %opts = @_;
-  return if (-d "$GITPACK");
+
+  my $name = $opts{name} || '';
+
+  return if (-d "$GITPACK/git/$name");
 
   my @view = &getView ();
 
@@ -210,35 +213,37 @@ sub init
 
   if (my $repo = $opts{repository})
     {
-      my $p = &scanPack (@view[1..$#view]);
+      my $p = &scanPack (map { "$_/$name" } @view[1..$#view]);
 
       &mkpath ("$GITPACK/");
 
       if ($opts{branch})
         {
-          &run (@GIT, 'clone', '--branch', $opts{branch}, $repo, "./$GITPACK/git");
+          &run (@GIT, 'clone', '--branch', $opts{branch}, $repo, "./$GITPACK/git/$name");
         }
       elsif ($opts{commit})
         {
-          &run (@GIT, 'clone', $repo, "./$GITPACK/git");
-          &git (cmd => ['checkout', $opts{commit}]);
+          &run (@GIT, 'clone', $repo, "./$GITPACK/git/$name");
+          &git (cmd => ['checkout', $opts{commit}], name => $name);
         }
       else
         {
-          &run (@GIT, 'clone', $repo, "./$GITPACK/git");
+          &run (@GIT, 'clone', $repo, "./$GITPACK/git/$name");
         }
       
-      my $g = &scanPack ("$PACK/$GITPACK/git");
+      my $g = &scanPack ({name =>$name}, "$PACK/$GITPACK/git/$name");
 
       my @f = sort keys (%{ {%$p, %$g} });
 
       for my $f (@f)
         {
-          my @l = ("$PACK/$GITPACK/tmp/$f", "$view[0]/$f");
+          my @l = ("$PACK/$GITPACK/tmp/$name/$f", "$view[0]/$name/$f");
           my $stp = $p->{$f} && stat ($p->{$f});
           my $stg = $g->{$f} && stat ($g->{$f});
+
           if ($p->{$f} && $g->{$f})
             {
+              unlink ($_) for (@l);
               unless (&testEqualFiles ($p->{$f}, $g->{$f}))
                 {
                   &doLink ($g->{$f}, $_) for (@l);
@@ -255,20 +260,20 @@ sub init
         }
 
     }
-  elsif ($pack1 && (-d "$pack1/$GITPACK/git"))
+  elsif ($pack1 && (-d "$pack1/$GITPACK/git/$name"))
     {
       &mkpath ("$GITPACK/");
 
-      my $stg = stat ("$pack1/$GITPACK/git");
+      my $stg = stat ("$pack1/$GITPACK/git/$name");
       my $stG = stat ($GITPACK);
 
       if ($stg->uid () == $stG->uid ())
         {
-          &run ("cp -alf $pack1/$GITPACK/git/ ./$GITPACK/git");
+          &run ("cp -alf $pack1/$GITPACK/git/$name ./$GITPACK/git/$name");
         }
       else
         {
-          &run ("cp -r $pack1/$GITPACK/git/ ./$GITPACK/git");
+          &run ("cp -r $pack1/$GITPACK/git//$name ./$GITPACK/git/$name");
         }
     }
   elsif ($pack1 && -f (my $populated_from = "$pack1/.populated_from"))
@@ -292,20 +297,29 @@ sub init
         local $SIG{__DIE__} = undef;
         &YAML::LoadFile ($bundle);
       };
-      $Y = $Y->{projects};
-      my ($IAL) = grep { $_->{IAL} } @$Y;
-      $IAL = $IAL->{IAL};
 
-      my ($repo, $commit) = ($IAL->{git}, $IAL->{version});
-
-      if ($repo =~ s/^~(\w+)//o)
+      for (@{ $Y->{projects} })
         {
-          my $user = $1;
-          my ($home) = (getpwnam ($user))[7];
-          $repo = "$home$repo";
+          my ($name, $proj) = %$_;
+
+          my ($repo, $commit, $gmkpack) = @{$proj}{qw (git version gmkpack)};
+
+	  next unless (index ($gmkpack, 'src/local') == 0);
+
+	  ($name) = ($gmkpack =~ m,^src/local/(\w+),o);
+	  $name ||= '';
+
+          if ($repo =~ s/^~(\w+)//o)
+            {
+              my $user = $1;
+              my ($home) = (getpwnam ($user))[7];
+              $repo = "$home$repo";
+            }
+
+          &init (%opts, repository => $repo, commit => $commit, name => $name);
+
         }
 
-      &init (%opts, repository => $repo, commit => $commit);
     }
   else
     {
@@ -354,20 +368,21 @@ sub check
 }
 
 
-my %opts;
+my %opts = (name => '');
 
 sub git
 {
   use POSIX qw ();
   my %args = @_;
 
+  my $name = $args{name} || '';
 
-  my @cmd = (@GIT, "--git-dir=$PACK/$GITPACK/git/.git", "--work-tree=$PACK/$GITPACK/git", @{ $args{cmd} || [] });
+  my @cmd = (@GIT, "--git-dir=$PACK/$GITPACK/git/$name/.git", "--work-tree=$PACK/$GITPACK/git/$name", @{ $args{cmd} || [] });
 
   print "@cmd\n" if ($opts{verbose});
 
 
-  chdir ("$PACK/$GITPACK/git/.git") if ($args{chdir});
+  chdir ("$PACK/$GITPACK/git/$name/.git") if ($args{chdir});
   my $c = system (@cmd);
   chdir ($PACK) if ($args{chdir});
 
@@ -432,7 +447,7 @@ EOF
 }
 
 my @opts_f = qw (verbose init bash help check force-r force-w dont-remove-identical-files);
-my @opts_s = qw (repository branch);
+my @opts_s = qw (repository branch name);
 
 sub help
 {
@@ -512,7 +527,10 @@ unless ($r || $w)
 
 sub scanPack
 {
+  my $opts = ref ($_[0]) ? shift (@_) : {name => ''};
   my @view = @_;
+
+  my $name = $opts{name};
 
   use Digest::MD5;
   my $key = join ('-', map ({ &Digest::MD5::md5_hex ($_) } @view)); 
@@ -532,7 +550,12 @@ sub scanPack
           my $wanted = sub 
           { 
             my $f = $File::Find::name; 
-            $p->{$f} ||= 'File::Spec'->rel2abs ($f) if (&ok ($f)) 
+	    if (&ok ($f))
+	      {
+	        my $g = $f;
+	        $g = "$name/$g" if ($name);
+                $p->{$g} ||= 'File::Spec'->rel2abs ($f);
+	      }
           };
           if (my @dir = grep { -d } <*>)
             {
@@ -867,7 +890,7 @@ if ($command eq 'gui')
   }
 else
   {
-    $c = &git (cmd => [$command, @args], die => 0, chdir => (grep ({ $_ eq $command } @chdir) || 0));
+    $c = &git (cmd => [$command, @args], die => 0, chdir => (grep ({ $_ eq $command } @chdir) || 0), name => $opts{name});
   }
 
 #####          Third part : update local and tmp using repository          #####
