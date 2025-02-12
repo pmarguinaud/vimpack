@@ -381,8 +381,6 @@ echo "PLEASE MERGE MANUALLY; DO NOT FORGET TO COMMIT YOUR CHANGES"
 
 EOF
 
-  chmod (0755, 'cmd.sh');
-
   while (&getStatus (%opts, pack => $pack1))
     {
       if (system (qw (bash --init-file ./.synpack.sh -i)))
@@ -416,9 +414,8 @@ echo "PLEASE COMPILE MANUALLY; DO NOT FORGET TO COMMIT YOUR CHANGES"
 
 EOF
 
-  chmod (0755, 'cmd.sh');
-
-  while ((! -f "$pack1/bin/$opts{executable}") or &getStatus (%opts, pack => $pack1))
+  my $executable = uc ($opts{executable});
+  while ((! -f "$pack1/bin/$executable") or &getStatus (%opts, pack => $pack1))
     {
       if (system (qw (bash --init-file ./.synpack.sh -i)))
         {
