@@ -175,7 +175,7 @@ sub script
   chmod (0755, $_[0]);
 }
 
-my %opts = qw (type xterm);
+my %opts = (qw (type xterm), init => $ENV{GMK_LOCAL_PROFILE});
 my @opts_s = qw (type init);
 my @opts_f = qw (log warn);
 
