@@ -751,7 +751,7 @@ else
       }
 
     symlink ($xppath, $dv);
-    &swapLink ($dv);
+#   &swapLink ($dv);
 
     if ($opts{dumper})
       {
