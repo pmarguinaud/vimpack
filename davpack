@@ -149,7 +149,9 @@ sub davaiRunCommand
   my $profile = "$HOME/.davai_profile";
   die unless (-f $profile);
 
-  my $out = `set -e ; source $profile > /dev/null 2>&1; @cmd`;
+  my $venvCommand = -f "venv/bin/activate" ? "source ./venv/bin/activate;" : "";
+
+  my $out = `set -e ; source $profile > /dev/null 2>&1; $venvCommand @cmd`;
   my $c = $?;
 
   print $out if ($args{verbose});
@@ -185,6 +187,11 @@ sub davaiNewXp
                                           -c => "$branch:$commit", $branch], 
                               %args);
   my ($nrv) = ($out =~ m/=> (\S+)/goms);
+
+  unless ($nrv) # davai/2
+    {
+      ($nrv) = ($out =~ m/XP path created : (\S+)/goms);
+    }
   
   return $nrv;
 }
@@ -321,7 +328,7 @@ sub getConfPath
   
   die unless ($host && $user);
   
-  return "$nrv/DAVAI-tests/conf/$host.ini";
+  return "$nrv/conf/davai_nrv.ini";
 }
 
 
@@ -339,7 +346,9 @@ sub getConf
   
   die unless ($host && $user);
 
-  my $conf = &slurp ("$nrv/DAVAI-tests/conf/$host.ini");
+  my $conf = -f "$nrv/DAVAI-tests/conf/$host.ini"  
+           ? &slurp ("$nrv/DAVAI-tests/conf/$host.ini")
+           : &slurp ("$nrv/conf/davai_nrv.ini");
   my ($compilation_flavour) = ($conf =~ m/compilation_flavour\s*=\s*(\S+)/goms);
   my ($compilation_flavours) = ($conf =~ m/compilation_flavours\s*=\s*list\(\s*(.*?)\s*\)/goms);
   $compilation_flavours = [split (m/\s*,\s*/o, $compilation_flavours)];
@@ -751,7 +760,7 @@ else
       }
 
     symlink ($xppath, $dv);
-#   &swapLink ($dv);
+#   &swapLink ($dv); # davai/2
 
     if ($opts{dumper})
       {

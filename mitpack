@@ -368,7 +368,7 @@ sub generateProFile
 
   for my $job (@list)
     {
-      next unless ($job =~ m/^(?:L3_|GM_)/o);
+      next unless ($job =~ m/^(?:L3_|GM_|IFS_)/o);
       $fh->printf ("%-80s %s\n", $job, $MASTERODB);
     }
 
@@ -811,6 +811,8 @@ $opts{filter} = [split (m/,/o, $opts{filter})];
 if ($opts{reuse})
   {
     $mitraillette = &getLastMitraillette (pack => $pack);
+    die ("Could not found last mitraillette directory\n")
+      unless ($mitraillette);
   }
 else
   {
