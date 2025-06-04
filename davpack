@@ -183,8 +183,14 @@ sub davaiNewXp
   my $branch = &getBranch (%args);
   my $commit = &getCommit (%args);
 
-  my $out = &davaiRunCommand (command => ['davai-new_xp', -v => $args{version}, ($args{origin} ? ('--origin' => $args{origin}) : ()),
-                                          -c => "$branch:$commit", $branch], 
+  my $out = &davaiRunCommand (command => [
+                                            'davai-new_xp', 
+                                            '-e',                                                        # Editable
+                                            -v => $args{version},                                        # Version of tests
+                                            ($args{origin} ? ('--origin' => $args{origin}) : ()),        # Location of davai repository
+                                            -c => "$branch:$commit",                                     # Comment (will appear in web interface)
+                                            $branch,
+                                          ], 
                               %args);
   my ($nrv) = ($out =~ m/=> (\S+)/goms);
 
@@ -410,17 +416,26 @@ sub setBinaryLinks
   my ($compilation_flavour) = grep ({ $pack =~ m/$_$/ } @{ $conf->{compilation_flavours} });
   $compilation_flavour = lc ($compilation_flavour);
   
-  my $pack2bin = &getMtoolRoot (conf => $conf) . "/pack2bin.$compilation_flavour";
-  
-  &mkpath ($pack2bin);
+  my $mtoolroot = &getMtoolRoot (conf => $conf);
 
-  for my $bin (sort keys (%pack2davai))
+  my @pack2bin = map ({ "$mtoolroot/${_}pack2bin.$compilation_flavour" } 
+                 (
+                  '',                  # old one
+                  'build.gmkpack@',    # new one
+                 ));
+
+  for my $pack2bin (@pack2bin)
     {
-      die ("Missing `$pack/bin/$bin'") unless (-f "$pack/bin/$bin");
-      my ($o, $t) = ("$pack/bin/$bin", "$pack2bin/$pack2davai{$bin}.$conf->{executables_fmt}");
-      next if (-l $t);
-      symlink ($o, $t) or die ("Cannot symlink $o -> $t");
-      print "symlink $o -> $t\n" if ($args{verbose});
+       &mkpath ($pack2bin);
+      
+       for my $bin (sort keys (%pack2davai))
+         {
+           die ("Missing `$pack/bin/$bin'") unless (-f "$pack/bin/$bin");
+           my ($o, $t) = ("$pack/bin/$bin", "$pack2bin/$pack2davai{$bin}.$conf->{executables_fmt}");
+           next if (-l $t);
+           symlink ($o, $t) or die ("Cannot symlink $o -> $t");
+           print "symlink $o -> $t\n" if ($args{verbose});
+         }
     }
   
 }

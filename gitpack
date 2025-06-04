@@ -283,6 +283,11 @@ sub init
       my ($repo) = ($text =~ m/- IAL :\s*git\s*:\s*(\S+)/goms);
       my ($commit) = ($text =~ m/Commit:\s*(\S+)/goms);
 
+      if ((! $repo) && $commit)
+        {
+          # Assume repository is ACCORD-NWP
+          $repo = "https://github.com/ACCORD-NWP/IAL";
+        }
 
       die ("Cannot find repo & commit in $populated_from") unless ($repo && $commit);
 
