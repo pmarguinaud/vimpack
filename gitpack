@@ -199,7 +199,7 @@ sub init
     {
       my $genesis = &genesis ();
       my $cycle = $genesis->{r};
-      my $conf = "$Bin/gitpack.$cycle.conf";
+      my $conf = "$BIN/gitpack.$cycle.conf";
       &copy ($conf, '.gitpack.conf') if (-f $conf);
     }
 
