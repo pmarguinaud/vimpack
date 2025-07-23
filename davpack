@@ -120,6 +120,9 @@ use JSON;
 use Storable;
 use POSIX qw (strftime);
 use File::stat;
+use File::Find;
+use File::Copy;
+use File::Spec;
 use Term::ANSIColor;
 
 use FindBin qw ($Bin);
@@ -185,7 +188,7 @@ sub davaiNewXp
 
   my $out = &davaiRunCommand (command => [
                                             'davai-new_xp', 
-                                            '-e',                                                        # Editable
+#                                           '-e',                                                        # Editable
                                             -v => $args{version},                                        # Version of tests
                                             ($args{origin} ? ('--origin' => $args{origin}) : ()),        # Location of davai repository
                                             -c => "$branch:$commit",                                     # Comment (will appear in web interface)

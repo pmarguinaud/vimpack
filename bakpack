@@ -135,6 +135,17 @@ sub commandPack
   chdir ($cwd);
 }
 
+sub swapLink
+{
+  my $f = shift;
+  $f = 'File::Spec'->rel2abs ($f);
+  return unless (-l $f);
+  my $g = readlink ($f);
+  unlink ($f);
+  rename ($g, $f);
+  symlink ($f, $g);
+}
+
 sub listing
 {
   my $class = shift;
@@ -184,6 +195,18 @@ sub archive
     }
 
   $opts{pack} or die;
+
+
+  # Move davai experiments into pack
+  {
+    my $cwd = &cwd ();
+    chdir ($opts{pack});
+    for my $dv (grep { -l } <dv-*>)
+      {
+        &swapLink ($dv);
+      }
+    chdir ($cwd);
+  }
 
   my $pack = &basename ($opts{pack});
   my $dir = &dirname ($opts{pack});
