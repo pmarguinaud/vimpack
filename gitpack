@@ -130,6 +130,8 @@ my @GITK = ('gitk');
 my $GITPACK = '.gitpack';
 my $PACK = &cwd ();
 my $HOME = (getpwuid ($>))[7];
+my $KO;
+
 
 sub run
 {
@@ -173,6 +175,45 @@ sub genesis
 
 
   return \%genesis;
+}
+
+sub createConfFromRepo
+{
+  if ((! -f '.gitpack.conf') && (-f "./$GITPACK/git/.gmkpack_ignored"))
+    {
+      $KO = undef;  # Create new conf file, reset KO
+
+      my @ignore = grep { ! ((m/^\s*#/o) || (m/^\s*$/o)) } do { my $fh = 'FileHandle'->new ("<./$GITPACK/git/.gmkpack_ignored"); <$fh> };
+      for (@ignore)
+        {
+          chomp;
+          s/(?:^\s*|\s*$)//go;
+        }
+
+      my $fh = 'FileHandle'->new ('>.gitpack.conf');
+      $fh->print (<< 'EOF');
+{
+	ignore => [
+EOF
+
+      for my $ignore (@ignore)
+        {
+          if (-f "./$GITPACK/git/$ignore")
+            {
+              $fh->print ("               qr,^$ignore\$,o,\n");
+            }
+          elsif (-d "./$GITPACK/git/$ignore")
+            {
+              $fh->print ("               qr,^$ignore/,o,\n");
+            }
+        }
+
+      $fh->print (<< 'EOF');
+	],
+}
+EOF
+      $fh->close ();
+    }
 }
 
 sub init
@@ -230,6 +271,8 @@ sub init
         {
           &run (@GIT, 'clone', $repo, "./$GITPACK/git/$name");
         }
+
+      (-f '.gitpack.conf') or &createConfFromRepo ();
       
       my $g = &scanPack ({name =>$name}, "$PACK/$GITPACK/git/$name");
 
@@ -275,6 +318,9 @@ sub init
         {
           &run ("cp -r $pack1/$GITPACK/git//$name ./$GITPACK/git/$name");
         }
+
+      (-f '.gitpack.conf') or &createConfFromRepo ();
+
     }
   elsif ($pack1 && -f (my $populated_from = "$pack1/.populated_from"))
     {
@@ -292,6 +338,9 @@ sub init
       die ("Cannot find repo & commit in $populated_from") unless ($repo && $commit);
 
       &init (%opts, repository => $repo, commit => $commit);
+
+      (-f '.gitpack.conf') or &createConfFromRepo ();
+
     }
   elsif ($pack1 && -f (my $bundle = "$pack1/bundle.yml"))
     {
@@ -324,6 +373,8 @@ sub init
           &init (%opts, repository => $repo, commit => $commit, name => $name);
 
         }
+
+      (-f '.gitpack.conf') or &createConfFromRepo ();
 
     }
   else
@@ -597,29 +648,27 @@ sub getConf
   return "$pack/.gitpack.conf";
 }
 
-my $ko;
-
 sub ok
 {
   my $f = shift;
-
+  
   my $ret = 0;
 
   goto RETURN unless (-f $f);
 
-  unless ($ko)
+  unless ($KO)
     {
-      $ko = [];
+      $KO = [];
 
       for my $conf ("$HOME/.gitpack.conf", &getConf ($PACK))
         {
           next unless (-f $conf);
           $conf = do ($conf);
-          push @$ko, @{ $conf->{ignore} || [] };
+          push @$KO, @{ $conf->{ignore} || [] };
         }
     }
 
-  for my $m (@$ko)
+  for my $m (@$KO)
     {
       goto RETURN if ($f =~ $m);
     }
