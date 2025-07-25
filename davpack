@@ -464,7 +464,15 @@ sub getVersion
 
   my $cycle = &getCycle ();
   
-  return $cycle2version{$cycle};
+  return $cycle2version{$cycle} if ($cycle2version{$cycle});
+
+  my $davai_default_version = '.gitpack/git/.davai_default_version';
+  if (-f $davai_default_version)
+    {
+      my ($version) = do { my $fh = 'FileHandle'->new ("<$davai_default_version"); <$fh> };
+      chomp ($version);
+      return $version;
+    }
 }
 
 sub checkGmkpack
