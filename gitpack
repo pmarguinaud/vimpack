@@ -198,13 +198,13 @@ EOF
 
       for my $ignore (@ignore)
         {
-          if (-f "./$GITPACK/git/$ignore")
-            {
-              $fh->print ("               qr,^$ignore\$,o,\n");
-            }
-          elsif (-d "./$GITPACK/git/$ignore")
+          if (-d "./$GITPACK/git/$ignore")
             {
               $fh->print ("               qr,^$ignore/,o,\n");
+            }
+          else
+            {
+              $fh->print ("               qr,^$ignore\$,o,\n");
             }
         }
 
@@ -254,8 +254,6 @@ sub init
 
   if (my $repo = $opts{repository})
     {
-      my $p = &scanPack (map { "$_/$name" } @view[1..$#view]);
-
       &mkpath ("$GITPACK/");
 
       if ($opts{branch})
@@ -274,6 +272,8 @@ sub init
 
       (-f '.gitpack.conf') or &createConfFromRepo ();
       
+      my $p = &scanPack (map { "$_/$name" } @view[1..$#view]);
+
       my $g = &scanPack ({name =>$name}, "$PACK/$GITPACK/git/$name");
 
       my @f = sort keys (%{ {%$p, %$g} });
