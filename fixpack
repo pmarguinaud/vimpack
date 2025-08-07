@@ -229,21 +229,6 @@ if ($opts{log})
      };
   }
 
-my @session;
-
-if ($opts{type} eq 'xterm')
-  {
-    @session = qw (xterm +sb -bg black -fg grey70 -geometry 150x60+0+0 -e ./.bin/shell.sh);
-  }
-elsif ($opts{type} eq 'screen')
-  {
-    @session = (qw (screen -S), $prog, qw (-D -m ./.bin/shell.sh));
-  }
-else
-  {
-    $log->("Unknown type : $opts{type}");
-  }
-
 # Find file processed by gmkpack
 
 # pack : pack we compile for
@@ -254,6 +239,22 @@ else
 my ($temp, $orig, $pack, $file) = ('', '', @ENV{qw (TARGET_PACK GMK_CURRENT_FILE)});
 
 $file ||= '';
+
+my @session;
+
+if ($opts{type} eq 'xterm')
+  {
+    @session = qw (xterm +sb -bg black -fg grey70 -geometry 150x60+0+0 -e ./.bin/shell.sh);
+  }
+elsif ($opts{type} eq 'screen')
+  {
+    my $name = $prog; $name = $name . '-' . &basename ($file) if ($file);
+    @session = (qw (screen -S), $prog, qw (-D -m ./.bin/shell.sh));
+  }
+else
+  {
+    $log->("Unknown type : $opts{type}");
+  }
 
 $log->(&Dumper (\%opts));
 $log->(&Dumper (\@cmd));
