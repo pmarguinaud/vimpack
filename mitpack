@@ -91,6 +91,149 @@ pmarguinaud@hotmail.com
 
 =cut
 
+package aggregate;
+
+use strict;
+
+use FileHandle;
+use Data::Dumper;
+use Storable;
+
+use strict;
+
+sub slurpl
+{
+  my $f = shift;
+  my @x = do { my $fh = 'FileHandle'->new ("<$f"); <$fh> };
+  chomp for (@x);
+  return @x;
+}
+
+sub header
+{
+  my $f = shift;
+
+  my @sbatch = grep { s/^#SBATCH\s+//o } &slurpl ($f);
+
+  my %h;
+
+  for (@sbatch)
+    {
+      s/\s*$//o;
+      next if (m/^--job-name=/o);
+
+      if (m/^(--\S+)=(.*)$/o)
+        {
+          $h{$1} = $2;
+        }
+      elsif (m/^(--?\S+)\s+(\S.*)$/o)
+        {
+          $h{$1} = $2;
+        }
+      elsif (m/^(-\S+)$/o)
+        {
+          $h{$1} = 1;
+        }
+    }  
+
+  for (values (%h))
+    {
+      s/^"//o;
+      s/"$//o;
+    }
+
+  return \%h;
+}
+
+sub aggregate
+{
+  my $max = shift; # Max time in minutes
+  my @cjob = @_;
+
+  return @cjob unless ($max > 0);
+
+  local $Storable::canonical = 1;
+  
+  my (%j, %h);
+  
+  for my $f (@cjob)
+    {
+      my $h = &header ($f);
+  
+      my $time = delete $h->{'--time'};
+      my $o = delete $h->{'-o'};
+  
+      my $sign = &Storable::freeze ($h);
+
+      push @{ $j{$sign} }, {file => $f, time => $time, output => $o};
+      $h{$sign} = $h;
+    }
+
+  my @sh;
+  
+  my $count = 0;
+
+  for my $sign (sort { $h{$b}{'--nodes'} <=> $h{$a}{'--nodes'} } keys (%j))
+    {
+      my $h = $h{$sign};
+  
+      my $time = 0;
+  
+      my @job;
+
+      my $dump = sub
+      {
+        return unless (@job);
+
+        push @sh, (my $sh = sprintf ('mit.%6.6d.sh', $count++));
+
+        my $fh = 'FileHandle'->new (">$sh");
+        
+        $fh->print ("#!/bin/bash\n");
+
+        for my $attr (sort keys (%$h))
+          {
+            $fh->print ("#SBATCH $attr $h->{$attr}\n");
+          }
+        $fh->print ("#SBATCH --time $time\n");
+        $fh->print ("#SBATCH -o /dev/null\n");
+  
+        $fh->print ("\n" x 2);
+  
+        for my $job (@job)
+          {
+            chmod (0755, $job->{file});
+            (my $output = $job->{output}) =~ s/%j/\$SLURM_JOBID/o;
+            $fh->print ("sleep 2; STARTTIME=\$(date +%Y-%m-%dT%H:%M:%S) ./$job->{file} > $output 2>&1\n\n");
+          }
+  
+        $fh->close ();
+  
+        $time = 0; 
+        @job = ();
+      };
+  
+      for my $job (@{ $j{$sign} })
+        {
+          $time += $job->{'time'};
+  
+          if ($time > $max)
+            {
+              $dump->();
+            }
+          else
+            {
+              push @job, $job;
+            }
+        }
+
+      $dump->();
+  
+    }
+
+  return @sh;
+}
+
 package build;
 
 use strict;
@@ -676,24 +819,27 @@ sub runMitrailletteTestCase
       rename ($_, "old/$_") for (@o);
     }
 
-  if (my @filter = @{ $args{filter} })
+  my @cjob = grep 
+  {
+    my $cjob = $_;
+    my $ok = 1;
+    if (my @filter = @{ $args{filter} })
+      {
+        $ok = 0;
+        for (@filter)
+          {
+            $ok ||= ($cjob =~ m/$_/);
+          }
+      }
+    $ok
+  } <*.cjob>;
+
+
+  my @sh = &aggregate::aggregate ($args{maxtime}, @cjob);
+
+  for my $sh (@sh)
     {
-      for my $cjob (<*.cjob>)
-        { 
-          my $ok = 0;
-          for (@filter)
-            {
-              $ok ||= ($cjob =~ m/$_/);
-            }
-          &submitJob (%args, job => $cjob) if ($ok);
-        }
-    }
-  else
-    {
-      for my $cjob (<*.cjob>)
-        {
-          &submitJob (%args, job => $cjob);
-        }
+      &submitJob (%args, job => $sh);
     }
 
 }
@@ -728,6 +874,7 @@ EOF
   $status = 'Missing' if ($status && ($status =~ m/Cannot access/o));
   $status = 'non-zero status' if ($status && ($status =~ m/^mpirun detected/o));
   $status = 'non-zero status' if ($status && ($status =~ m/^Command exited with non-zero status/o));
+  $status = 'signalled' if ($status && ($status =~ m/^Process received signal/o));
   
 
   $status = substr ($status, 0, 20) if ($status);
@@ -761,6 +908,7 @@ sub colorStatus
     Missing           => 'black on_red',
     'non-zero status' => 'black on_red',
     'ABORT!'          => 'black on_red',
+    signalled         => 'black on_red',
   );
 
   if ((-t STDOUT) && (my $color = $color{$status}))
@@ -934,9 +1082,9 @@ sub getLastMitraillette
 my $build = 'build'->new ();
 $build or die ("mitpack should be called either from a pack or from a cmake build");
 
-my %opts = (version => $build->getVersion (), filter => '');
+my %opts = (version => $build->getVersion (), filter => '', maxtime => 0);
 my @opts_f = qw (verbose help reuse dryrun status status-edit-diff cancel list only-completed);
-my @opts_s = qw (version reference filter);
+my @opts_s = qw (version reference filter maxtime);
 
 sub help
 {
