@@ -972,7 +972,6 @@ sub showStatus
          
           $build1 = 'build'->new (path => "$reference/..");
 
-          $build1 or die;
         }
       else
         {
