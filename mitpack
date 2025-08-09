@@ -91,6 +91,179 @@ pmarguinaud@hotmail.com
 
 =cut
 
+package build;
+
+use strict;
+use Cwd;
+
+sub new
+{
+  my $class = shift;
+  my %args = @_;
+
+  $args{path} ||= &cwd ();
+
+  if ($class eq __PACKAGE__)
+    {
+      if (-f "$args{path}/.genesis")
+        {
+          $class = 'build::pack';
+        }
+      elsif (-f "$args{path}/build/install_manifest.txt")
+        {
+          $class = 'build::cmake';
+        }
+      else
+        {
+          return;
+        }
+    }
+  else
+    {
+      return bless \%args, $class;
+    }
+  
+  return $class->new (%args);
+}
+
+sub getPath
+{
+  my $self = shift;
+  return $self->{path};
+}
+
+package build::pack;
+
+use File::Basename;
+
+use strict;
+
+our @ISA = qw (build);
+
+sub getExecutablePath
+{
+  my ($self, $exec) = @_;
+  return "$self->{path}/bin/$exec";
+}
+
+sub getLabel 
+{
+  my $self = shift;
+  return &basename ($self->{path});
+}
+
+sub slurp
+{
+  my $f = shift;
+  (my $fh = 'FileHandle'->new ("<$f")) or die ("Cannot open `$f'");
+  local $/ =  undef; 
+  my $text = <$fh>;
+  return $text;
+}
+
+sub getGenesis
+{
+  my $self = shift;
+  die unless (-f "$self->{path}/.genesis");
+  chomp (my $genesis = &slurp ("$self->{path}/.genesis"));
+  my @genesis = split (m/\s+/o, $genesis);
+  return @genesis;
+}
+
+sub getCycle
+{
+  my $self = shift;
+  my @genesis = $self->getGenesis ();
+  for my $i (0 .. $#genesis)
+    {
+      return $genesis[$i+1] if ($genesis[$i] eq '-r');
+    }
+}
+
+sub getVersion
+{
+  my $self = shift;
+  my $cycle = $self->getCycle ();
+
+  my %cycle2version =
+  (
+    '49t1' => 'CY49T1',
+    '50'   => 'CY50',
+  );
+
+  return $cycle2version{$cycle};
+}
+
+sub getInstallPath
+{
+  my $self = shift;
+  return $self->{path};
+}
+
+package build::cmake;
+
+use File::Basename;
+use Data::Dumper;
+
+use strict;
+
+our @ISA = qw (build);
+
+sub getExecutablePath
+{
+  my ($self, $exec) = @_;
+
+  if ($self->{executablePath}{$exec})
+    {
+      return $self->{executablePath}{$exec};
+    }
+
+  my @install = do { my $fh = 'FileHandle'->new ("<$self->{path}/build/install_manifest.txt"); <$fh> };
+  chomp for (@install);
+
+  for my $path (@install)
+    {
+      if ($exec eq &basename ($path))
+        {
+          $self->{executablePath}{$exec} = $path;
+          return $path;
+        }
+    }
+
+  die ("Executable $exec was not found in $self->{path}");
+}
+
+sub getInstallPath
+{
+  my $self = shift;
+  my $path = $self->getExecutablePath ('MASTERODB');
+
+  for (1 .. 2)
+    {
+      $path = &dirname ($path);
+    }
+ 
+  return $path;
+}
+
+sub getLabel
+{
+  my $self = shift;
+
+  my @cmd = ('git', -C => $self->{path}, qw (branch --show-current));
+
+  my $branch = `@cmd`;
+
+  die ("Command `@cmd' failed") if ($?);
+
+  return $branch;
+}
+
+sub getVersion
+{
+  my $self = shift;
+  return undef;
+}
 
 package node;
 
@@ -228,6 +401,7 @@ use File::Basename;
 use Data::Dumper;
 use Getopt::Long;
 use Term::ANSIColor;
+use File::stat;
 use FindBin qw ($Bin);
 use lib "$Bin/lib";
 use bt;
@@ -289,63 +463,33 @@ sub runMitrailleCommand
     and die ("Command `@cmd' failed\n");
 }
 
-sub slurp
-{
-  my $f = shift;
-  (my $fh = 'FileHandle'->new ("<$f")) or die ("Cannot open `$f'");
-  local $/ =  undef; 
-  my $text = <$fh>;
-  return $text;
-}
-
 sub swapLink
 {
   my $f = shift;
   return unless (-l $f);
+
+  $f = 'File::Spec'->rel2abs ($f);
+
   my $g = readlink ($f);
+
+  my $stf = stat (&dirname ($f));
+  my $stg = stat (&dirname ($g));
+
+  return unless ($stf->dev == $stg->dev);
+
   unlink ($f);
   rename ($g, $f);
   symlink ($f, $g);
 }
 
-sub getGenesis
-{
-  die unless (-f '.genesis');
-  chomp (my $genesis = &slurp ('.genesis'));
-  my @genesis = split (m/\s+/o, $genesis);
-  return @genesis;
-}
-
-sub getCycle
-{
-  my @genesis = &getGenesis ();
-  for my $i (0 .. $#genesis)
-    {
-      return $genesis[$i+1] if ($genesis[$i] eq '-r');
-    }
-}
-
-sub getVersion
-{
-  my $cycle = &getCycle ();
-
-  my %cycle2version =
-  (
-    '49t1' => 'CY49T1',
-    '50'   => 'CY50',
-  );
-
-  return $cycle2version{$cycle};
-}
-
 sub generateProFile
 {
   my %args = @_;
-  my $pack = $args{pack};
+  my $build = $args{build};
 
-  my $MASTERODB = "$pack/bin/MASTERODB";
+  my $MASTERODB = $build->getExecutablePath ('MASTERODB');
 
-  my $p = &basename ($pack);
+  my $p = $build->getLabel ();
 
   my @list = do 
   { 
@@ -381,9 +525,9 @@ sub createMitrailletteTestCase
 {
   my %args = @_;
 
-  my $pack = $args{pack};
+  my $build = $args{build};
 
-  my $pro_file = &generateProFile (pack => $pack, %args);
+  my $pro_file = &generateProFile (build => $build, %args);
 
   chdir ($MITRAILLE);
   
@@ -408,7 +552,7 @@ sub createMitrailletteTestCase
 
   for my $cjob (@cjob)
     {
-      &patchCJob ($cjob);
+      &patchCJob (cjob => $cjob, build => $build);
     }
 
   'FileHandle'->new (">$mitraillette/VERSION")->print ("$args{version}\n");
@@ -418,10 +562,13 @@ sub createMitrailletteTestCase
 
 sub patchCJob
 {
-  my ($cjob) = @_;
+  my %args = @_;
+
+  my ($build, $cjob) = @args{qw (build cjob)};
+  
+  my $install = $build->getInstallPath ();
 
   my @text = do { my $fh = 'FileHandle'->new ("<$cjob"); <$fh> };
-
 
   for (@text)
     {
@@ -445,8 +592,24 @@ sub patchCJob
        {
          $_ = ":\n";
        }
-     if (m/\\rm (?:fort.4|\$file|\*|lola)/o) {
+     if (m/\\rm (?:fort.4|\$file|\*|lola)/o) 
+       {
          $_ = ":\n";
+       }
+     if (m/^\$CP \$MYOWNBIN ARPEXE/o)
+       {
+         $_ = ":\n";
+       }
+     if (m/^(\s*)\$MPILAUNCH \.\/ARPEXE \$ZOPT/o)
+       {
+         my $indent = $1;
+         $_ = << "EOF";
+${indent}if [ -f "$install/mitpack.sh" ]
+${indent}then
+${indent}  source "$install/mitpack.sh"
+${indent}fi
+${indent}\$MPILAUNCH \$MYOWNBIN \$ZOPT
+EOF
        }
     }
 
@@ -461,6 +624,15 @@ sub submitJob
   my ($id) = ($out =~ m/Submitted batch job (\d+)/o);
   'FileHandle'->new (">$job.id")->print ("$id\n");
   return $id;
+}
+
+sub slurp
+{
+  my $f = shift;
+  (my $fh = 'FileHandle'->new ("<$f")) or die ("Cannot open `$f'");
+  local $/ =  undef; 
+  my $text = <$fh>;
+  return $text;
 }
 
 sub cancelJob
@@ -549,11 +721,16 @@ EOF
   my ($CNMEXPL) = ($text =~ m/CNMEXPL=(\w+)/goms);
   $CNMEXPL or die ($o);
 
-  my ($status) = ($text =~ m/(ABOR1|FAILED|SIGSEGV|CANCELLED|forrtl: severe|BAD TERMINATION|SPECTRAL NORMS[^\n]*NaN|Cannot access ..\/ARPEXE.)/goms);
+  my ($status) = ($text =~ m/(Command exited with non-zero status|Process received signal|mpirun detected that one or more processes exited with non-zero status|ABOR1|ABORT!|FAILED|SIGSEGV|CANCELLED|forrtl: severe|BAD TERMINATION|SPECTRAL NORMS[^\n]*NaN|Cannot access ..\/(?:MASTERODB|ARPEXE).)/goms);
 
   $status =~ s/^forrtl:.*SIGSEGV/SIGSEGV/o if ($status);
   $status = 'NaN' if ($status && ($status =~ m/NaN/o));
   $status = 'Missing' if ($status && ($status =~ m/Cannot access/o));
+  $status = 'non-zero status' if ($status && ($status =~ m/^mpirun detected/o));
+  $status = 'non-zero status' if ($status && ($status =~ m/^Command exited with non-zero status/o));
+  
+
+  $status = substr ($status, 0, 20) if ($status);
 
   unless ($status)
     {
@@ -582,6 +759,8 @@ sub colorStatus
     'BAD TERMINATION' => 'black on_red',
     NaN               => 'black on_red',
     Missing           => 'black on_red',
+    'non-zero status' => 'black on_red',
+    'ABORT!'          => 'black on_red',
   );
 
   if ((-t STDOUT) && (my $color = $color{$status}))
@@ -598,7 +777,7 @@ sub listTestCases
 {
   my %args = @_;
 
-  (my $pack = $args{pack}) or die;
+  (my $build = $args{build}) or die;
 
   my $mitraillette = $args{mitraillette};
 
@@ -616,42 +795,31 @@ sub showStatus
 {
   my %args = @_;
 
-  (my $pack = $args{pack}) or die;
+  (my $build = $args{build}) or die;
 
   my ($mitraillette, $reference) = @args{qw (mitraillette reference)};
 
-  my ($pack1, $mitraillette1);
+  my ($build1, $mitraillette1);
 
   if ($reference)
     {
-      if (-f "$reference/.genesis")
+      if ($build1 = 'build'->new (path => $reference))
         {
-          $pack1 = $reference;
-          ($mitraillette1) = &getLastMitraillette (pack => $reference);
+          ($mitraillette1) = &getLastMitraillette (build => $reference);
           $mitraillette1 or die;
+        }
+      elsif (my ($cjob) = <$reference/*.cjob>)
+        {
+          $mitraillette1 = $reference;
+          my ($text) = &slurp ($cjob);
+         
+          $build1 = 'build'->new (path => "$reference/..");
+
+          $build1 or die;
         }
       else
         {
-          if (my ($cjob) = <$reference/*.cjob>)
-            {
-              $mitraillette1 = $reference;
-              my ($text) = &slurp ($cjob);
-              my ($MYOWNBIN) = ($text =~ m/MYOWNBIN=(\S+)/goms);
-              die unless ($MYOWNBIN);
-              die unless (-f $MYOWNBIN);
-             
-              $pack1 = $MYOWNBIN;
-
-              for (1 .. 2)
-                {
-                  $pack1 = &dirname ($pack1);
-                }
-
-            }
-          else
-            {
-              die;
-            }
+          die;
         }
     }
 
@@ -668,11 +836,10 @@ sub showStatus
 
   my ($log, $fhlog);
 
-  if ($pack1)
+  if ($build1)
     {
-      $log = "$pack/diff." . &basename ($mitraillette) . '-' . &basename ($mitraillette1) . ".txt";
+      $log = $build->getPath () . '/diff.' . &basename ($mitraillette) . '-' . &basename ($mitraillette1) . ".txt";
       $fhlog = 'FileHandle'->new (">$log");
-      
     }
   
   my $len = 0;
@@ -757,14 +924,17 @@ sub getLastMitraillette
 {
   my %args = @_;
 
-  (my $pack = $args{pack}) or die;
+  (my $build = $args{build}) or die;
 
   my @mitraillette = sort grep { -d && m/mitraille_\d\d\d\d$/o } <mitraille_????>;
 
   return pop (@mitraillette);
 }
 
-my %opts = (version => &getVersion (), filter => '');
+my $build = 'build'->new ();
+$build or die ("mitpack should be called either from a pack or from a cmake build");
+
+my %opts = (version => $build->getVersion (), filter => '');
 my @opts_f = qw (verbose help reuse dryrun status status-edit-diff cancel list only-completed);
 my @opts_s = qw (version reference filter);
 
@@ -791,11 +961,6 @@ if ($opts{help})
     exit (0);
   }
 
-die ("Start mitpack from within a pack\n") 
-  unless (-f '.genesis');
-
-my $pack = &cwd ();
-
 my $mitraillette;
 
 $opts{reuse} ||= $opts{status};
@@ -810,7 +975,7 @@ $opts{filter} = [split (m/,/o, $opts{filter})];
 
 if ($opts{reuse})
   {
-    $mitraillette = &getLastMitraillette (pack => $pack);
+    $mitraillette = &getLastMitraillette (build => $build);
     die ("Could not found last mitraillette directory\n")
       unless ($mitraillette);
   }
@@ -818,19 +983,19 @@ else
   {
     die ("No version of tests was found\n") 
       unless ($opts{version});
-    $mitraillette = &createMitrailletteTestCase (pack => $pack, %opts);
-    my $local = "$pack/" . &basename ($mitraillette);
+    $mitraillette = &createMitrailletteTestCase (build => $build, %opts);
+    my $local = $build->getPath () . '/' . &basename ($mitraillette);
     symlink ($mitraillette, $local);
     &swapLink ($local);
   }
 
 if ($opts{list})
   {
-    &listTestCases (mitraillette => $mitraillette, pack => $pack, %opts);
+    &listTestCases (mitraillette => $mitraillette, build => $build, %opts);
   }
 elsif ($opts{status})
   {
-    &showStatus (mitraillette => $mitraillette, pack => $pack, %opts);
+    &showStatus (mitraillette => $mitraillette, build => $build, %opts);
   }
 elsif ($opts{cancel})
   {
