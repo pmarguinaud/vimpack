@@ -797,9 +797,10 @@ sub cancelMitraillette
 
   chdir ($mitraillette);
 
-  for my $cjob (<*.cjob>)
+  for my $jobid (<*.id>)
     {
-      &cancelJob (%args, job => $cjob);
+      (my $job = $jobid) =~ s/\.id$//o;
+      &cancelJob (%args, job => $job);
     }
 
 }
@@ -885,6 +886,14 @@ EOF
     }
 
   $status ||= 'UNKNOWN';
+
+  if ($status eq 'UNKNOWN')
+    {
+      if ($text =~ m/sacct -j/o)
+        {
+#         $status = 'COMPLETE';
+        }
+    }
 
   return {status => $status, CNMEXPL => $CNMEXPL};
 }
