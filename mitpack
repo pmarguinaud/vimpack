@@ -741,7 +741,7 @@ sub patchCJob
        }
      if (m/^\$CP \$MYOWNBIN ARPEXE/o)
        {
-         $_ = ":\n";
+#        $_ = ":\n";
        }
      if (m/^(\s*)\$MPILAUNCH \.\/ARPEXE \$ZOPT/o)
        {
