@@ -614,13 +614,13 @@ sub runTestCases
   if (my @filter = @{ $args{filter} })
     {
       my @list = &getTestCases (%args);
-      
+
       for my $test (@list)
         {
           my $ok = 0;
           for (@filter)
             {
-              $ok ||= ($test =~ m/$_/);
+              $ok ||= ($test =~ m/$_/i);
             }
           &davaiRunCommand (command => ['davai-run_tests', $test], %args) if ($ok);
         }
