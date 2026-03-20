@@ -360,6 +360,8 @@ sub init
 
 	  next unless (index ($gmkpack, 'src/local') == 0);
 
+          $repo =~ s,\${GITHUB},https://github.com,o;
+
 	  ($name) = ($gmkpack =~ m,^src/local/(\w+),o);
 	  $name ||= '';
 
@@ -485,7 +487,7 @@ sub gitk
 }
 
 my @r = qw (branch push status log show commit fetch diff tag remote difftool blame rev-parse);
-my @w = qw (checkout pull merge reset mergetool cherry-pick rebase gui);
+my @w = qw (checkout pull merge reset mergetool cherry-pick rebase gui stash revert);
 my @chdir = qw (mergetool);
 
 sub bash

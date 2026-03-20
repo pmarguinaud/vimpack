@@ -149,7 +149,9 @@ sub davaiRunCommand
 
   print "@cmd\n" if ($args{verbose});
 
-  my $profile = "$HOME/.davai_profile";
+  my $profile = $args{profile} || 'davai_profile';
+
+  $profile = "$HOME/.$profile";
   die unless (-f $profile);
 
   my $venvCommand = -f "venv/bin/activate" ? "source ./venv/bin/activate;" : "";
@@ -180,6 +182,45 @@ sub gitpackRunCommand
 }
 
 sub davaiNewXp
+{
+  my %args = @_;
+
+  if (-f ".gitpack/git/davai/bin/new_xp.py")
+    {
+      return &davaiNewXpNew (%args);
+    }
+  else
+    {
+      return &davaiNewXpOld (%args);
+    }
+
+}
+
+sub davaiNewXpNew
+{
+  my %args = @_;
+
+  my $branch = &getBranch (%args);
+  my $commit = &getCommit (%args);
+
+  my $out = &davaiRunCommand (command => [
+                                            '.gitpack/git/davai/bin/new_xp.py', 
+#                                           '-e',                                                        # Editable
+                                            -c => "$branch:$commit",                                     # Comment (will appear in web interface)
+                                          ], 
+                              davai_profile => 'davai_profile.new',
+                              %args);
+  my ($nrv) = ($out =~ m/=> (\S+)/goms);
+
+  unless ($nrv) # davai/2
+    {
+      ($nrv) = ($out =~ m/XP path created : (\S+)/goms);
+    }
+  
+  return $nrv;
+}
+
+sub davaiNewXpOld
 {
   my %args = @_;
 
@@ -219,16 +260,16 @@ sub getCommit
 
 my %pack2davai =
 (
-  ioassign  => 'ioassign',
-  BATOR     => 'batodb',
-  lfitools  => 'lfitools',
-  MASTERODB => 'masterodb',
-  OOTESTVAR => 'oopsbinary.ifs-ootestvar',
-  OOVAR     => 'oopsbinary.ifs-oovar',
-  PGD       => 'buildpgd',
-  PREP      => 'prep',
-  MASTERODB => 'ifsmodel.ifs',
-  OOTESTVAR => 'oopsbinary.ifs-ootestcomponent',
+  ioassign  => ['ioassign'                         ,  ''                         ],
+  BATOR     => ['batodb'                           ,  ''                         ],
+  lfitools  => ['lfitools'                         ,  'FALFILFA/bin/lfitools_dp' ],
+  MASTERODB => ['masterodb'                        ,  ''                         ],
+  OOTESTVAR => ['oopsbinary.ifs-ootestvar'         ,  ''                         ],
+  OOVAR     => ['oopsbinary.ifs-oovar'             ,  ''                         ],
+  PGD       => ['buildpgd'                         ,  'SURFEX/bin/pgd_dp'        ],
+  PREP      => ['prep'                             ,  'SURFEX/bin/prep_dp'       ],
+  MASTERODB => ['ifsmodel.ifs'                     ,  ''                         ],
+  OOTESTVAR => ['oopsbinary.ifs-ootestcomponent'   ,  ''                         ],
 );
       
 sub getGenesis
@@ -276,16 +317,19 @@ sub compileBinaries
   my %args = @_;
   my $pack = $args{pack};
 
-  my @binlist = ('MASTERODB', grep ({ $_ ne 'MASTERODB' } sort (keys (%pack2davai))));
+  my @binlist = ('MASTERODB');
+
+  my $allok = 1;
 
   for my $program (sort keys (%pack2davai))
     {
-      goto COMPILE unless (-f "$pack/bin/$program");
+      my $desc = $pack2davai{$program};
+      next if ($desc->[1]);
+      $allok = $allok && (-f "$pack/bin/$program");
+      push @binlist, $program unless ($program eq 'MASTERODB');
     }
 
-  return;
-
-COMPILE:
+  return if ($allok);
 
   my $cwd = &cwd ();
 
@@ -358,8 +402,12 @@ sub getConf
   my $conf = -f "$nrv/DAVAI-tests/conf/$host.ini"  
            ? &slurp ("$nrv/DAVAI-tests/conf/$host.ini")
            : &slurp ("$nrv/conf/davai_nrv.ini");
+
+  my @conf = grep { !/^\s*#/o } split (m/\n/o, $conf);
+  $conf = join ("\n", @conf, "");
+
   my ($compilation_flavour) = ($conf =~ m/compilation_flavour\s*=\s*(\S+)/goms);
-  my ($compilation_flavours) = ($conf =~ m/compilation_flavours\s*=\s*list\(\s*(.*?)\s*\)/goms);
+  my ($compilation_flavours) = ($conf =~ m/compilation_flavours\s*=\s*list\(\s*(.[^\n]*?)\s*\)/goms);
   $compilation_flavours = [split (m/\s*,\s*/o, $compilation_flavours)];
 
   my ($executables_fmt) = ($conf =~ m/executables_fmt\s*=\s*(\S+)/goms);
@@ -425,7 +473,10 @@ sub setBinaryLinks
                  (
                   '',                  # old one
                   'build.gmkpack@',    # new one
+                  'build@gmkpack.',    # new one
                  ));
+
+  chomp for (my @view = do { my $fh = 'FileHandle'->new ("<$pack/.gmkview"); <$fh> });
 
   for my $pack2bin (@pack2bin)
     {
@@ -433,11 +484,34 @@ sub setBinaryLinks
       
        for my $bin (sort keys (%pack2davai))
          {
-           die ("Missing `$pack/bin/$bin'") unless (-f "$pack/bin/$bin");
-           my ($o, $t) = ("$pack/bin/$bin", "$pack2bin/$pack2davai{$bin}.$conf->{executables_fmt}");
-           next if (-l $t);
-           symlink ($o, $t) or die ("Cannot symlink $o -> $t");
-           print "symlink $o -> $t\n" if ($args{verbose});
+           my $desc = $pack2davai{$bin};
+           my ($davaiLink, $hubName) = @$desc;
+
+           $davaiLink = "$pack2bin/$davaiLink.$conf->{executables_fmt}";
+
+           if ($hubName)
+             {
+               for my $view (@view)
+                 {
+                   next unless (-f (my $hub = "$pack/hub/$view/install/$hubName"));
+                   my ($o, $t) = ($hub, $davaiLink);
+                   goto FOUND_IN_HUB if (-l $t);
+                   symlink ($o, $t) or die ("Cannot symlink $o -> $t");
+                   print "symlink $o -> $t\n" if ($args{verbose});
+                   goto FOUND_IN_HUB;
+                 }
+               die ("Executable `$bin' was not found in hub");
+FOUND_IN_HUB:
+
+             }
+           else
+             {
+               die ("Missing `$pack/bin/$bin'") unless (-f "$pack/bin/$bin");
+               my ($o, $t) = ("$pack/bin/$bin", $davaiLink);
+               next if (-l $t);
+               symlink ($o, $t) or die ("Cannot symlink $o -> $t");
+               print "symlink $o -> $t\n" if ($args{verbose});
+             }
          }
     }
   
@@ -751,8 +825,12 @@ if ($opts{versions})
     exit (0);
   }
 
-die ("No version of tests was found\n")
-  unless ($opts{version});
+unless (-f '.gitpack/git/davai/bin/new_xp.py')
+  {
+    die ("No version of tests was found\n")
+      unless ($opts{version});
+  }
+
 die ("Start davpack from within a pack\n")
   unless (-d '.gitpack');
 
