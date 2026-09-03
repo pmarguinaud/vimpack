@@ -212,7 +212,7 @@ sub archive
   my $dir = &dirname ($opts{pack});
 
   my $tar = 'File::Spec'->canonpath (join ('/', $opts{scratchdir}, "$pack.tar"));
-  my $uri = 'URI'->new ($opts{remote} . "/$pack.tar");
+  my $uri = 'URI'->new ($opts{remote} . "/$dir/$pack.tar");
   my $scheme = $uri->scheme ();
 
 # (-f $tar) or

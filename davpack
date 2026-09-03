@@ -262,12 +262,12 @@ my %pack2davai =
 (
   ioassign  => ['ioassign'                         ,  ''                         ],
   BATOR     => ['batodb'                           ,  ''                         ],
-  lfitools  => ['lfitools'                         ,  'FALFILFA/bin/lfitools_dp' ],
+  lfitools  => ['lfitools'                         ,  'FALFILFA/bin/lfitools'    ],
   MASTERODB => ['masterodb'                        ,  ''                         ],
   OOTESTVAR => ['oopsbinary.ifs-ootestvar'         ,  ''                         ],
   OOVAR     => ['oopsbinary.ifs-oovar'             ,  ''                         ],
-  PGD       => ['buildpgd'                         ,  'SURFEX/bin/pgd_dp'        ],
-  PREP      => ['prep'                             ,  'SURFEX/bin/prep_dp'       ],
+  PGD       => ['buildpgd'                         ,  'SURFEX/bin/pgd'           ],
+  PREP      => ['prep'                             ,  'SURFEX/bin/prep'          ],
   MASTERODB => ['ifsmodel.ifs'                     ,  ''                         ],
   OOTESTVAR => ['oopsbinary.ifs-ootestcomponent'   ,  ''                         ],
 );
@@ -493,12 +493,15 @@ sub setBinaryLinks
              {
                for my $view (@view)
                  {
-                   next unless (-f (my $hub = "$pack/hub/$view/install/$hubName"));
-                   my ($o, $t) = ($hub, $davaiLink);
-                   goto FOUND_IN_HUB if (-l $t);
-                   symlink ($o, $t) or die ("Cannot symlink $o -> $t");
-                   print "symlink $o -> $t\n" if ($args{verbose});
-                   goto FOUND_IN_HUB;
+                   for my $prec (qw (_sp _dp))
+                     {
+                       next unless (-f (my $hub = "$pack/hub/$view/install/$hubName$prec"));
+                       my ($o, $t) = ($hub, $davaiLink);
+                       goto FOUND_IN_HUB if (-l $t);
+                       symlink ($o, $t) or die ("Cannot symlink $o -> $t");
+                       print "symlink $o -> $t\n" if ($args{verbose});
+                       goto FOUND_IN_HUB;
+                     }
                  }
                die ("Executable `$bin' was not found in hub");
 FOUND_IN_HUB:
