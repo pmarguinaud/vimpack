@@ -120,16 +120,15 @@ sub getBuilds
 
 my %cmake2davai =
 (
-  ioassign      => 'ioassign'                         ,
-  'bator.x'     => 'batodb'                           ,
-  lfitools_dp   => 'lfitools'                         ,
-  MASTERODB     => 'masterodb'                        ,
-# OOTESTVAR     => 'oopsbinary.ifs-ootestvar'         ,
-  'ifs4dvar.DP' => 'oopsbinary.ifs-oovar'             ,
-  pgd_dp        => 'buildpgd'                         ,
-  prep_dp       => 'prep'                             ,
-  MASTERODB     => 'ifsmodel.ifs'                     ,
-# OOTESTVAR     => 'oopsbinary.ifs-ootestcomponent'   ,
+  ioassign                  => 'ioassign'                         ,
+  'bator.x'                 => 'batodb'                           ,
+  lfitools_dp               => 'lfitools'                         ,
+  MASTERODB                 => 'masterodb'                        ,
+  'ifs4dvar.DP'             => 'oopsbinary.ifs-oovar'             ,
+  pgd_dp                    => 'buildpgd'                         ,
+  prep_dp                   => 'prep'                             ,
+  MASTERODB                 => 'ifsmodel.ifs'                     ,
+  'TestSuiteVariational.DP' => 'oopsbinary.ifs-ootestcomponent'   ,
 );
       
 sub compileBinaries
