@@ -571,7 +571,7 @@ else
         {
           opts =>  
             {   
-              'prefix-mpirun' => ['=', [$dumper, '--path', $dvpath, '--']],
+              'prefix-mpirun' => ['=', [$dumper, '--path', $dvpath, '--pack', &Cwd::cwd (), '--']],
             },  
         };
 

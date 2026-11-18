@@ -7,8 +7,10 @@
 # Before running COMMAND, the task directory is saved in
 # $workdir/<basename DIR>/<task>.<jobid>.<n>: read-only files are hard-linked in
 # ro/, writable files are copied in rw/, and a run.sh script is written to run the
-# task again (same #SBATCH header, environment and mpiauto command). After the run,
-# the NODE.*, stdeo.*, drhook.prof.* and linux_bind.txt files are saved in ref/.
+# task again (same #SBATCH header, environment and mpiauto command). A task.json file
+# describes the task for davimport; its rc and elapsed fields are written after the
+# run. After the run, the NODE.*, stdeo.*, drhook.prof.* and linux_bind.txt files are
+# saved in ref/.
 #
 # The exit code is the one of COMMAND; a failure to save the task is reported but
 # never prevents COMMAND from running.
@@ -227,30 +229,39 @@ sub getSbatchHeader
   return @h;
 }
 
-# The MPI command: the command line of the parent process (mpiauto), with the
-# binary replaced by $PACK/bin/<binary> when a pack is given
+my %davai2pack =
+(
+  ALARO          => 'MASTERODB',
+  AROME          => 'MASTERODB',
+  ARPEGE         => 'MASTERODB',
+  HARMONIEAROME  => 'MASTERODB',
+  IFS            => 'MASTERODB',
+  OOTESTVAR      => 'OOTESTVAR',
+  OOVAR          => 'OOVAR',
+);
 
-sub getMPICommand
+# The command line of the parent process (mpiauto)
+
+sub getMPIRun
 {
-  my %args = @_;
-
   my @mpirun = &cmdline (&POSIX::getppid ());
-
-  my %davai2pack =
-  (
-    ALARO          => 'MASTERODB',
-    AROME          => 'MASTERODB',
-    ARPEGE         => 'MASTERODB',
-    HARMONIEAROME  => 'MASTERODB',
-    IFS            => 'MASTERODB',
-    OOTESTVAR      => 'OOTESTVAR',
-    OOVAR          => 'OOVAR',
-  );
 
   if ((scalar (@mpirun) > 3) && ($mpirun[0] eq '/usr/bin/perl') && ($mpirun[1] eq '-w'))
     {
       splice (@mpirun, 0, 2);
     }
+
+  return @mpirun;
+}
+
+# The MPI command: the command line of mpiauto, with the binary replaced by
+# $PACK/bin/<binary> when a pack is given
+
+sub getMPICommand
+{
+  my %args = @_;
+
+  my @mpirun = &getMPIRun ();
 
   # Shell words of the command; the binary in the pack is not quoted, for $PACK to be expanded
 
@@ -285,7 +296,7 @@ sub getMPICommand
 
 sub getEnvironmentVariables
 {
-  my @skip = qw (HOME DISPLAY HISTCONTROL HISTSIZE HOSTNAME LD_PRELOAD LANG ECA CNC REMOTEHOST COLUMNS
+  my @skip = qw (HOME DISPLAY HISTCONTROL HISTSIZE HOSTNAME LD_PRELOAD LD_LIBRARY_PATH LANG ECA CNC REMOTEHOST COLUMNS
                  LOADEDMODULES LOGNAME OMP_NUM_THREADS PATH PMI_TIME SHELL SHLVL _ _MPIAUTORANK LESSOPEN
                  LS_COLORS MAIL MANPATH FTDIR ENVIRONMENT MODULEPATH MODULESHOME QT_GRAPHICSSYSTEM_CHECKED
                  QT_PLUGIN_PATH TMP TMPDIR USER WORKDIR XDG_DATA_DIRS XDG_RUNTIME_DIR XDG_SESSION_ID ftdir
@@ -448,6 +459,60 @@ EOF
   chmod (0755, $script);
 }
 
+# Description of the task for davimport: what run.sh holds, in a form that
+# does not need to be parsed back
+
+sub getTask
+{
+  my %args = @_;
+
+  my @mpirun = &getMPIRun ();
+
+  # mpiauto options before --, then the binary and its arguments
+
+  my ($i) = grep { $mpirun[$_] eq '--' } (0 .. $#mpirun);
+  my @opt = defined ($i) ? @mpirun[0 .. $i-1] : ();
+  my @cmd = defined ($i) ? @mpirun[$i+1 .. $#mpirun] : ();
+
+  my %layout;
+  for my $j (0 .. $#opt - 1)
+    {
+      $layout{$1} = $opt[$j+1] + 0 if ($opt[$j] =~ m/^--(nn|nnp|openmp)$/o);
+    }
+
+  my ($binary, @args) = @cmd;
+
+  my @sbatch = map { chomp; s/^#SBATCH\s+//o; $_ } &getSbatchHeader ();
+  my %env = &getEnvironmentVariables ();
+
+  return
+  {
+    experiment => &basename ($opts{path}),
+    task       => $args{task},
+    jobname    => $ENV{SLURM_JOB_NAME},
+    jobid      => $ENV{SLURM_JOBID} + 0,
+    pack       => $opts{pack},
+    binary     => defined ($binary) ? &basename ($binary) : undef,
+    args       => \@args,
+    layout     => \%layout,
+    sbatch     => \@sbatch,
+    env        => \%env,
+    olddir     => $args{olddir},
+  };
+}
+
+sub writeTask
+{
+  my ($task, $newdir) = @_;
+  my $f = "$newdir/task.json";
+  &trace ("write $f");
+  my $fh = 'FileHandle'->new (">$f");
+  unless ($fh && $fh->print ('JSON'->new ()->pretty ()->canonical ()->encode ($task)) && $fh->close ())
+    {
+      &error ("cannot write $f: $!");
+    }
+}
+
 sub copyData
 {
   my %args = @_;
@@ -535,7 +600,7 @@ $opts{verbose} ||= $ENV{DAVPACK_DUMPER_VERBOSE};
 
 my $olddir = &Cwd::cwd ();
 
-my ($newdir, $davdir);
+my ($newdir, $davdir, $task);
 
 # Save the task; any failure is reported, and the command is run anyway
 
@@ -574,6 +639,8 @@ eval
   &doMkpath ($newdir) or die ("Cannot create $newdir\n");
 
   &createScript (olddir => $olddir, newdir => $newdir, pack => $opts{pack});
+  $task = &getTask (olddir => $olddir, task => $path);
+  &writeTask ($task, $newdir);
   &copyData (olddir => $olddir, newdir => $newdir);
 
   if (-d $opts{path})
@@ -592,7 +659,11 @@ eval
   &error ("saving the task failed: $msg");
 };
 
+my $start = time ();
+
 my $rc = system (@ARGV);
+
+my $elapsed = time () - $start;
 
 # Exit code of the command, as the shell reports it
 
@@ -611,6 +682,11 @@ if ($newdir && (-d $newdir))
         for my $f (grep { -f $_ } <NODE.*>, <stdeo.*>, <drhook.prof.*>, "linux_bind.txt")
           {
             &doCopy ($f, "$newdir/ref/$f");
+          }
+        if ($task)
+          {
+            @{$task}{qw (rc elapsed)} = ($code, $elapsed);
+            &writeTask ($task, $newdir);
           }
       }
   }
