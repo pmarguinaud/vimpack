@@ -439,7 +439,6 @@ sub git
 
   print "@cmd\n" if ($opts{verbose});
 
-
   chdir ("$PACK/$GITPACK/git/$name/.git") if ($args{chdir});
   my $c = system (@cmd);
   chdir ($PACK) if ($args{chdir});

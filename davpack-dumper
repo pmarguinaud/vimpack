@@ -1,23 +1,181 @@
 #!/usr/bin/perl -w
+#
+# Wrapper for the MPI launcher of a Davai task (mpiauto prefix-mpirun):
+#
+#   davpack-dumper [--verbose] [--failed-only] [--path DIR] [--pack PACK] -- COMMAND ...
+#
+# Before running COMMAND, the task directory is saved in
+# $workdir/<basename DIR>/<task>.<jobid>.<n>: read-only files are hard-linked in
+# ro/, writable files are copied in rw/, and a run.sh script is written to run the
+# task again (same #SBATCH header, environment and mpiauto command). After the run,
+# the NODE.*, stdeo.*, drhook.prof.* and linux_bind.txt files are saved in ref/.
+#
+# The exit code is the one of COMMAND; a failure to save the task is reported but
+# never prevents COMMAND from running.
+#
 
 use FindBin qw ($Bin);
 use lib "$Bin/perl5";
 
-use Getopt::Long;
+use File::Copy;
+use File::Find;
 use FileHandle;
-use Data::Dumper;
 use File::Path;
 use File::Spec;
+use File::stat;
 use File::Basename;
-use JSON;
-use POSIX;
+
 use Cwd qw ();
+use Data::Dumper;
+use Fcntl qw (S_IWUSR S_IWGRP S_IWOTH);
+use Getopt::Long;
+
+use POSIX;
+
+use lib "/home/gmap/mrpm/marguina/perl5/lib/perl5";
+
+use JSON;
+
 use strict;
+
+my %opts = (path => $ENV{workdir}, pack => '');
+my @opts_f = qw (failed-only verbose help);
+my @opts_s = qw (path pack);
+
+my %help =
+(
+  'failed-only' => 'remove the saved task when COMMAND succeeds',
+  'verbose'     => 'trace all data movement (copy, link, move, removal) on stderr;'
+                 . ' also enabled by DAVPACK_DUMPER_VERBOSE=1',
+  'help'        => 'print this help',
+  'path'        => 'Davai experiment directory (default: $workdir); the saved task'
+                 . ' is linked there',
+  'pack'        => 'pack directory; run.sh then runs $PACK/bin/<binary>',
+);
+
+# Number of data movement operations that failed
+
+my $nerror = 0;
+
+sub trace
+{
+  print STDERR "davpack-dumper: @_\n" if ($opts{verbose});
+}
+
+sub error
+{
+  print STDERR "davpack-dumper: ERROR: @_\n";
+  $nerror++;
+}
+
+# Data movement; each operation is traced, and its failure is reported
+
+sub doMkpath
+{
+  my $dir = shift;
+  return 1 if (-d $dir);
+  &trace ("mkdir -p $dir");
+  eval { &mkpath ($dir) };
+  return 1 if (-d $dir);
+  &error ("cannot create $dir: " . ($@ || $!));
+  return 0;
+}
+
+sub doCopy
+{
+  my ($f, $g) = @_;
+  &doMkpath (&dirname ($g)) or return 0;
+  &trace ("copy $f -> $g");
+  unless (&copy ($f, $g))
+    {
+      &error ("cannot copy $f to $g: $!");
+      return 0;
+    }
+  my $st = stat ($f);
+  chmod ($st->mode () & 07777, $g) if ($st);
+  return 1;
+}
+
+sub doLink
+{
+  my ($f, $g) = @_;
+  &doMkpath (&dirname ($g)) or return 0;
+  &trace ("link $f -> $g");
+  return 1 if (link ($f, $g));
+  # Hard links are impossible across file systems: copy instead
+  if ($! == POSIX::EXDEV ())
+    {
+      &trace ("link $f: different file systems, copying");
+      return &doCopy ($f, $g);
+    }
+  &error ("cannot link $f to $g: $!");
+  return 0;
+}
+
+sub doSymlink
+{
+  my ($target, $g) = @_;
+  &doMkpath (&dirname ($g)) or return 0;
+  &trace ("symlink $g -> $target");
+  return 1 if (symlink ($target, $g));
+  &error ("cannot create symlink $g -> $target: $!");
+  return 0;
+}
+
+# Hard-link copy of a directory tree (cp -alf)
+
+sub doCopyTreeLinks
+{
+  my ($d, $g) = @_;
+  &doMkpath (&dirname ($g)) or return 0;
+  &trace ("cp -alf $d -> $g");
+  return 1 if (system ('cp', '-alf', $d, $g) == 0);
+  &error ("cp -alf $d $g failed");
+  return 0;
+}
+
+sub doRmtree
+{
+  my $d = shift;
+  return unless (-e $d || -l $d);
+  &trace ("rm -rf $d");
+  eval { &rmtree ($d) };
+  &error ("cannot remove $d: " . ($@ || $!)) if (-e $d);
+}
+
+sub doUnlink
+{
+  my $f = shift;
+  return unless (-e $f || -l $f);
+  &trace ("rm $f");
+  unlink ($f) or &error ("cannot remove $f: $!");
+}
+
+# Shell quoting
+
+sub shquote
+{
+  my $s = shift;
+  return $s if ($s =~ m{^[\w/.,:=+@%-]+$}o);
+  $s =~ s/'/'\\''/go;
+  return "'$s'";
+}
+
+# A value where each occurrence of $dir (as a path prefix) is replaced by the
+# unquoted shell expression $expr; the rest is quoted
+
+sub shquoteSubst
+{
+  my ($s, $dir, $expr) = @_;
+  my @part = split (m/\Q$dir\E(?=\/|:|$)/, $s, -1);
+  return &shquote ($s) if (@part == 1);
+  return join ($expr, map { length ($_) ? &shquote ($_) : '' } @part);
+}
 
 sub cmdline
 {
   my $pid = shift;
-  my $cmdline = &slurp ("/proc/$pid/cmdline"); 
+  my $cmdline = &slurp ("/proc/$pid/cmdline");
   my @cmdline = split (m/\0/o, $cmdline);
   return @cmdline;
 }
@@ -25,27 +183,34 @@ sub cmdline
 sub slurp
 {
   my $f = shift;
-  my $data = do { my $fh = 'FileHandle'->new ("<$f"); local $/ = undef; <$fh> };
-  return $data;
+  my $fh = 'FileHandle'->new ("<$f") or die ("Cannot open $f: $!\n");
+  local $/ = undef;
+  return <$fh>;
 }
 
-sub getScontrol
+# scontrol and sacct output, in memory: nothing is written in the task directory
+
+sub slurmJSON
 {
-  my $json = '.scontrol.json';  
-
-  system ("scontrol --json show job $ENV{SLURM_JOBID} > $json")
-    unless (-f $json);
-
-  my $scontrol = &decode_json (&slurp ($json));
-
-  return $scontrol;
+  my @cmd = @_;
+  my $text = qx (@cmd);
+  die ("@cmd failed\n") if ($? != 0);
+  return &decode_json ($text);
 }
 
 sub getSbatchScript
 {
-  my $scontrol = &getScontrol ();
+  my $scontrol = &slurmJSON ('scontrol', '--json', 'show', 'job', $ENV{SLURM_JOBID});
 
   my $script = $scontrol->{jobs}[0]{command};
+
+  unless ($script)
+    {
+      my $sacct = &slurmJSON ('sacct', '--json', '-j', $ENV{SLURM_JOBID});
+      my $wd = $sacct->{jobs}[0]{working_directory};
+      my @sl = split (m/\s+/o, $sacct->{jobs}[0]{submit_line});
+      $script = 'File::Spec'->rel2abs ($sl[-1], $wd);
+    }
 
   return $script;
 }
@@ -54,47 +219,95 @@ sub getSbatchHeader
 {
   my $script = &getSbatchScript ();
 
-  my @h = do { my $fh = 'FileHandle'->new ("<$script"); <$fh> };
+  my $fh = 'FileHandle'->new ("<$script") or die ("Cannot open $script: $!\n");
+  my @h = <$fh>;
 
   @h = grep { m/^#SBATCH/o } @h;
 
   return @h;
 }
 
+# The MPI command: the command line of the parent process (mpiauto), with the
+# binary replaced by $PACK/bin/<binary> when a pack is given
+
 sub getMPICommand
 {
-  return &cmdline (&POSIX::getppid ());
+  my %args = @_;
+
+  my @mpirun = &cmdline (&POSIX::getppid ());
+
+  my %davai2pack =
+  (
+    ALARO          => 'MASTERODB',
+    AROME          => 'MASTERODB',
+    ARPEGE         => 'MASTERODB',
+    HARMONIEAROME  => 'MASTERODB',
+    IFS            => 'MASTERODB',
+    OOTESTVAR      => 'OOTESTVAR',
+    OOVAR          => 'OOVAR',
+  );
+
+  if ((scalar (@mpirun) > 3) && ($mpirun[0] eq '/usr/bin/perl') && ($mpirun[1] eq '-w'))
+    {
+      splice (@mpirun, 0, 2);
+    }
+
+  # Shell words of the command; the binary in the pack is not quoted, for $PACK to be expanded
+
+  my @word = map { &shquote ($_) } @mpirun;
+
+  for my $i (0 .. $#mpirun)
+    {
+      $word[$i] = './' . &shquote (&basename ($mpirun[$i]))
+        if ($mpirun[$i] =~ m,^\Q$args{olddir}\E/,);
+    }
+
+  if ($args{pack})
+    {
+      for my $i (0 .. $#mpirun)
+        {
+          my $bin = $mpirun[$i];
+
+          next unless ((-f $bin) && (-x $bin));
+
+          $bin = &basename ($bin, qw (.X));
+
+          if ($bin = $davai2pack{$bin})
+            {
+              $word[$i] = '"$PACK/bin/' . $bin . '"';
+              last;
+            }
+        }
+    }
+
+  return @word;
 }
 
 sub getEnvironmentVariables
 {
-  my %args = @_;
-
-  my @skip = qw (HOME DISPLAY HISTCONTROL HISTSIZE HOSTNAME LD_PRELOAD LANG 
-               LOADEDMODULES LOGNAME OMP_NUM_THREADS PATH PMI_TIME SHELL 
-               SHLVL _ _MPIAUTORANK LESSOPEN LS_COLORS MAIL MANPATH FTDIR 
-               ENVIRONMENT MODULEPATH MODULESHOME QT_GRAPHICSSYSTEM_CHECKED 
-               QT_PLUGIN_PATH TMP TMPDIR USER WORKDIR XDG_DATA_DIRS
-               XDG_RUNTIME_DIR XDG_SESSION_ID ftdir tmpdir workdir
-               MODULESHOME TERM PWD);
+  my @skip = qw (HOME DISPLAY HISTCONTROL HISTSIZE HOSTNAME LD_PRELOAD LANG ECA CNC REMOTEHOST COLUMNS
+                 LOADEDMODULES LOGNAME OMP_NUM_THREADS PATH PMI_TIME SHELL SHLVL _ _MPIAUTORANK LESSOPEN
+                 LS_COLORS MAIL MANPATH FTDIR ENVIRONMENT MODULEPATH MODULESHOME QT_GRAPHICSSYSTEM_CHECKED
+                 QT_PLUGIN_PATH TMP TMPDIR USER WORKDIR XDG_DATA_DIRS XDG_RUNTIME_DIR XDG_SESSION_ID ftdir
+                 tmpdir workdir MODULESHOME TERM PWD DAVPACK_DUMPER_VERBOSE);
 
   my %skip = map { ($_, 1) } @skip;
 
   my %env;
 
-  my ($olddir, $newdir) = @args{qw (olddir newdir)};
-
   for my $var (sort keys (%ENV))
     {
       next if ($var =~ m/^(?:SLURM|I_MPI_|DAPL|MPIAUTO|SSH_|MTOOL_|CIBOULAI_|DAVAI_|VORTEX_|RD_)/o);
       next if ($skip{$var});
-      next if ((my $val = $ENV{$var}) =~ m/\n/o);
-      $val =~ s!^$olddir!$newdir!;
-      $env{$var} = $val;
+      next if ($ENV{$var} =~ m/\n/o);
+      $env{$var} = $ENV{$var};
     }
 
   return %env;
 }
+
+# LFI index files (F with a directory F.d): make the paths to the task
+# directory relative, so that they remain valid in the saved task
 
 sub fixLFI
 {
@@ -102,15 +315,29 @@ sub fixLFI
 
   my ($olddir, $newdir) = @args{qw (olddir newdir)};
 
+  my $cwd = &Cwd::cwd ();
+
+  chdir ($newdir) or return &error ("cannot chdir to $newdir: $!");
+
   for my $d (<*.d>)
     {
       (my $f = $d) =~ s/\.d$//o;
-      my @line = do { my $fh = 'FileHandle'->new ("<$f"); <$fh> };
+      next unless (-f $f);
+
+      my $fh = 'FileHandle'->new ("<$f");
+      unless ($fh)
+        {
+          &error ("cannot read $newdir/$f: $!");
+          next;
+        }
+      my @line = <$fh>;
+      $fh->close ();
+
       for my $line (@line)
         {
           chomp (my $ll = $line);
-          
-          if ($ll =~ m/^$olddir/o)
+
+          if ($ll =~ m/^\Q$olddir\E\//)
             {
               $ll = 'File::Spec'->abs2rel ($ll, $olddir);
               if (-f $ll)
@@ -125,22 +352,171 @@ sub fixLFI
                   $line = "$ll\n";
                 }
             }
-        } 
-  
-      unlink ($f);
-      'FileHandle'->new (">$f")->print (@line);
+        }
+
+      # The file may be a hard link to the task directory: write a new file
+
+      my $st = stat ($f);
+
+      &trace ("rewrite $newdir/$f (relative paths)");
+
+      unless (unlink ($f))
+        {
+          &error ("cannot remove $newdir/$f: $!");
+          next;
+        }
+
+      my $gh = 'FileHandle'->new (">$f");
+      unless ($gh && $gh->print (@line) && $gh->close ())
+        {
+          &error ("cannot write $newdir/$f: $!");
+          next;
+        }
+
+      chmod ($st->mode () & 07777, $f);
     }
 
+  chdir ($cwd);
 }
 
-my %opts = (path => '');
-my @opts_f = qw (failed-only verbose help);
-my @opts_s = qw (path);
+sub createScript
+{
+  my %args = @_;
+
+  my ($olddir, $newdir, $pack) = @args{qw (olddir newdir pack)};
+
+  my @head = &getSbatchHeader ();
+  my %env = &getEnvironmentVariables ();
+  my @mpirun = &getMPICommand (olddir => $olddir, pack => $pack);
+
+  my $script = "$newdir/run.sh";
+
+  &trace ("write $script");
+
+  my $fh = 'FileHandle'->new (">$script") or die ("Cannot write $script: $!\n");
+
+  $fh->print ("#!/bin/bash\n");
+
+  $fh->print (@head);
+
+  $fh->print (<< "EOF");
+
+set -x
+ulimit -s unlimited
+ulimit -c 0
+
+DATA=@{[ &shquote ($newdir) ]}
+EOF
+
+  $fh->print ("PACK=" . &shquote ($pack) . "\n") if ($pack);
+
+  $fh->print (<< 'EOF');
+
+cd $TMPDIR
+
+cp -alf $DATA/ro/* .
+cp -R $DATA/rw/* .
+
+EOF
+
+  # Paths to the task directory become paths to the current directory
+
+  for my $var (sort keys (%env))
+    {
+      $fh->print ("export $var=" . &shquoteSubst ($env{$var}, $olddir, '"$PWD"') . "\n");
+    }
+
+  $fh->print (<< "EOF");
+
+ls -l
+
+@mpirun
+rc=\$?
+
+ls -l
+
+if [ -f "NODE.001_01" ]
+then
+  cat NODE.001_01
+fi
+
+exit \$rc
+EOF
+
+  $fh->close () or die ("Cannot write $script: $!\n");
+
+  chmod (0755, $script);
+}
+
+sub copyData
+{
+  my %args = @_;
+
+  my ($olddir, $newdir) = @args{qw (olddir newdir)};
+
+  &doMkpath ("$newdir/ro");
+  &doMkpath ("$newdir/rw");
+
+  &find ({wanted => sub
+  {
+    my $f = $File::Find::name;
+
+    return if ($f eq '.');
+
+    $f =~ s,^\./,,o;
+
+    my $gro = "$newdir/ro/$f";
+    my $grw = "$newdir/rw/$f";
+
+    if ((-d $f) && (! -l $f))
+      {
+        # F.d is copied with F
+        if (($f =~ m/\.d$/o) && do { (my $b = $f) =~ s/\.d$//o; (-f $b) || (-l $b) })
+          {
+            $File::Find::prune = 1;
+            return;
+          }
+        # Empty directories are kept, writable
+        if (opendir (my $dh, $f))
+          {
+            my @e = grep { ! m/^\.\.?$/o } readdir ($dh);
+            &doMkpath ($grw) unless (@e);
+          }
+        return;
+      }
+
+    if (-l $f)
+      {
+        &doSymlink (readlink ($f), $gro);
+        &doCopyTreeLinks ("$f.d", "$gro.d") if (-d "$f.d");
+      }
+    elsif (-f $f)
+      {
+        my $st = stat ($f);
+        if ($st->mode () & (S_IWUSR | S_IWGRP | S_IWOTH))
+          {
+            &doCopy ($f, $grw);
+            &doCopyTreeLinks ("$f.d", "$grw.d") if (-d "$f.d");
+          }
+        else
+          {
+            &doLink ($f, $gro);
+            &doCopyTreeLinks ("$f.d", "$gro.d") if (-d "$f.d");
+          }
+      }
+
+  }, no_chdir => 1}, '.');
+
+  &fixLFI (olddir => $olddir, newdir => "$newdir/ro");
+  &fixLFI (olddir => $olddir, newdir => "$newdir/rw");
+}
 
 sub help
 {
-  print "Usage: " . &basename ($0) . "\n" 
-      . " Options:\n" . join ('', map { "   --$_\n" } @opts_f, @opts_s);
+  print "Usage: " . &basename ($0) . " [options] -- COMMAND ...\n"
+      . " Options:\n"
+      . join ('', map { sprintf ("   --%-13s %s\n", $_, $help{$_}) } @opts_f)
+      . join ('', map { sprintf ("   --%-13s %s\n", "$_=...", $help{$_}) } @opts_s);
 }
 
 &GetOptions
@@ -151,96 +527,95 @@ sub help
 
 if ($opts{help})
   {
-    &help (); 
+    &help ();
     exit (0);
   }
 
-my $olddir = &Cwd::cwd ();
-my $newdir = 'File::Spec'->canonpath (join ('/', $ENV{workdir}, &basename ($opts{path}), &basename ($olddir) . ".$ENV{SLURM_JOBID}"));
-my $davdir = 'File::Spec'->canonpath (join ('/', $opts{path}, &basename ($olddir) . ".$ENV{SLURM_JOBID}"));
+$opts{verbose} ||= $ENV{DAVPACK_DUMPER_VERBOSE};
 
-for (my $i = 0; ; $i++)
+my $olddir = &Cwd::cwd ();
+
+my ($newdir, $davdir);
+
+# Save the task; any failure is reported, and the command is run anyway
+
+eval
+{
+  die ("SLURM_JOBID is not set\n") unless ($ENV{SLURM_JOBID});
+  die ("workdir is not set\n") unless ($ENV{workdir});
+
+  my $path;
+
+  if ($ENV{SMSNAME})
+    {
+      $path = $ENV{SMSNAME};
+      $path =~ s,^/,,o;
+    }
+  else
+    {
+      $path = 'File::Spec'->abs2rel ($olddir, $ENV{MTOOL_STEP_SPOOL});
+    }
+
+  $newdir = 'File::Spec'->canonpath (join ('/', $ENV{workdir}, &basename ($opts{path}), "$path.$ENV{SLURM_JOBID}"));
+  $davdir = 'File::Spec'->canonpath (join ('/', $opts{path}, &basename ($olddir) . ".$ENV{SLURM_JOBID}"));
+
+  for (my $i = 0; ; $i++)
+    {
+      unless (-e "$newdir.$i")
+        {
+          $newdir = "$newdir.$i";
+          $davdir = "$davdir.$i";
+          last;
+        }
+    }
+
+  &trace ("saving $olddir in $newdir");
+
+  &doMkpath ($newdir) or die ("Cannot create $newdir\n");
+
+  &createScript (olddir => $olddir, newdir => $newdir, pack => $opts{pack});
+  &copyData (olddir => $olddir, newdir => $newdir);
+
+  if (-d $opts{path})
+    {
+      &doSymlink ($newdir, $davdir);
+    }
+  else
+    {
+      undef $davdir;
+    }
+
+  1;
+} or do
+{
+  chomp (my $msg = $@);
+  &error ("saving the task failed: $msg");
+};
+
+my $rc = system (@ARGV);
+
+# Exit code of the command, as the shell reports it
+
+my $code = $rc == -1 ? 127 : ($rc & 127) ? 128 + ($rc & 127) : $rc >> 8;
+
+if ($newdir && (-d $newdir))
   {
-    unless (-d "$newdir.$i")
+    if (($code == 0) && $opts{'failed-only'})
       {
-        $newdir = "$newdir.$i";
-        $davdir = "$davdir.$i";
-        last;
+        &trace ("command succeeded, removing the saved task (--failed-only)");
+        &doUnlink ($davdir) if ($davdir);
+        &doRmtree ($newdir);
+      }
+    else
+      {
+        for my $f (grep { -f $_ } <NODE.*>, <stdeo.*>, <drhook.prof.*>, "linux_bind.txt")
+          {
+            &doCopy ($f, "$newdir/ref/$f");
+          }
       }
   }
 
+print STDERR "davpack-dumper: $nerror error(s) while saving the task\n" if ($nerror);
+print STDERR "rc = $code\n";
 
-if ((system (@ARGV) == 0) && $opts{'failed-only'})
-  {
-    exit (0);
-  }
-
-if ($opts{path} && (-d "$davdir/"))
-  {
-    exit (0);
-  }
-
-&rmtree ($newdir);
-&mkpath ($newdir);
-
-my $fh = 'FileHandle'->new ('>run.sh');
-
-$fh->print ("#!/bin/bash\n");
-
-my @head = &getSbatchHeader ();
-
-for (@head)
-  {
-    $fh->print ($_);
-  }
-
-$fh->print (<< "EOF");
-
-set -x
-ulimit -s unlimited
-ulimit -c 0
-
-cd $newdir
-
-EOF
-
-my %env = &getEnvironmentVariables (olddir => $olddir, newdir => $newdir);
-
-for my $var (sort keys (%env))
-  {
-    $fh->printf ("export %s=\"%s\"\n", $var, $env{$var});
-  }
-
-my @mpirun = &getMPICommand ();
-
-for (@mpirun)
-  {
-    $_ = './' . &basename ($_) if (m,^$olddir,);
-  }
-
-$fh->printf (<< "EOF");
-
-ls -l 
-
-@mpirun
-
-ls -l 
-
-EOF
-
-$fh->close ();
-
-&fixLFI (olddir => $olddir, newdir => $newdir);
-
-chmod (0755, 'run.sh');
-
-system ("cp -alf * $newdir/");
-
-symlink ($newdir, $davdir)
-  if (-d $opts{path});
-
-exit (0);
-
-
-
-
+exit ($code);

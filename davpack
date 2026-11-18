@@ -484,8 +484,8 @@ sub showStatus
 
 my $build = 'davai::build'->new ();
 
-my %opts = (version => $build->getVersion (), filter => '');
-my @opts_f = qw (verbose dryrun help reuse status cancel dumper versions list);
+my %opts = (version => $build->getVersion (), filter => '', publish => 1);
+my @opts_f = qw (verbose dryrun help reuse status cancel dumper versions list publish);
 my @opts_s = qw (version filter origin reference);
 
 sub help
@@ -501,7 +501,7 @@ if (-f '.davpack.conf')
 
 &GetOptions
 (
-  (map { ($_, \$opts{$_}) } @opts_f),
+  (map { ("$_!", \$opts{$_}) } @opts_f),
   (map { ("$_=s", \$opts{$_}) } @opts_s),
 );
 
@@ -637,7 +637,7 @@ unless ($opts{dryrun} || $opts{status} || $opts{cancel} || $opts{list})
 
 chdir ($nrv);
 
-if (! $opts{reuse})
+if ((! $opts{reuse}) && ($opts{publish}))
   {
     &davaiRunCommand (command => ['davai-ciboulai_init'], %opts);
   }
