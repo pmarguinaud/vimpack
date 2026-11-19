@@ -61,7 +61,8 @@ Reuse last DAVAI test case.
 
 =item --status
 
-Show status of DAVAI tasks.
+Show status of DAVAI tasks, and the URL of the experiment in the Davai dashboard
+if it was published there (curl uses the usual proxy variables, eg ALL_PROXY).
 
 =item --cancel
 
@@ -409,13 +410,39 @@ sub runTestCases
     }
 }
 
+# URL of the experiment in the Davai dashboard (Ciboulai), if it was published there;
+# the system curl may not know the CA of the server, hence the bundle of the venv
+
+sub getDashboardURL
+{
+  my %args = @_;
+  my ($nrv, $conf) = @args{qw (nrv conf)};
+
+  return unless (my $server = $conf->{davai_server});
+  $server =~ s,/*$,/,o;
+
+  my @cacert = map { ('--cacert', $_) } <$nrv/venv/lib/python*/site-packages/certifi/cacert.pem>;
+
+  my $json = `curl -s --connect-timeout 5 --max-time 10 @cacert '${server}getSummary/$conf->{id}' 2>/dev/null`;
+  my $summary = eval { local $SIG{__DIE__}; &JSON::decode_json ($json) };
+
+  return unless ($summary && $summary->{id});
+
+  return "${server}lightView/$summary->{id}";
+}
+
 sub showStatus
 {
   my %args = @_;
   my $nrv = $args{nrv};
 
   my $conf = &davai::getConf (nrv => $nrv);
-  
+
+  if (my $url = &getDashboardURL (nrv => $nrv, conf => $conf))
+    {
+      print "Dashboard: $url\n";
+    }
+
   my $dir = &davai::getMtoolRoot (conf => $conf) . '/summaries_stack';
 
   use List::Util qw (uniq max);

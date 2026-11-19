@@ -66,7 +66,9 @@ sub getConf
 
   my ($executables_fmt) = ($conf =~ m/executables_fmt\s*=\s*(\S+)/goms);
   die unless ($compilation_flavour && $executables_fmt);
-  
+
+  my ($davai_server) = ($conf =~ m/davai_server\s*=\s*(\S+)/goms);
+
   $conf = 
     {
       conf => "$nrv/DAVAI-tests/conf/$host.ini",
@@ -76,6 +78,7 @@ sub getConf
       compilation_flavour  => $compilation_flavour,
       compilation_flavours => $compilation_flavours,
       executables_fmt      => $executables_fmt,
+      davai_server         => $davai_server,
     };
 
   return $conf;
